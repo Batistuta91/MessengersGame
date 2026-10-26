@@ -172,7 +172,7 @@
         targets: { yossi: null, cohen: null, daniel: null, roi: null, ido: null },
       },
       flags: { roiAttention: false, introShown: false, resultsSeen: false, tankTip: false, cohenChallot: false },
-      settings: { sound: true, shadows: true, cam: 'third' },
+      settings: { sound: true, shadows: true, cam: 'third', voice: true },
       greeted: 0,
       quests: {},
     };
@@ -567,7 +567,8 @@
       return;
     }
     if (mode !== 'play') return;
-    if (c === 'KeyE' || c === 'Enter') interact();
+    if ((c === 'KeyE' || c === 'Enter') && call && mode === 'play') endCall(true);
+    else if (c === 'KeyE' || c === 'Enter') interact();
     else if (c === 'KeyV') toggleCam();
     else if (c === 'KeyR') radio();
     else if (c === 'KeyN') nextSong();
@@ -1261,6 +1262,11 @@
     ui.dName.textContent = n.s === 'narr' ? '' : npc.name + ' · ' + npc.role;
     ui.dName.classList.toggle('hidden', n.s === 'narr');
     ui.dialog.classList.toggle('narr', n.s === 'narr');
+    if (G.voice) {
+      const sp = n.s === 'narr' ? 'narr' : dlg.npc.id || dlg.npc.def.id;
+      G.voice.speak(n.t, sp, dlg.npc.def.name, { queue: dlg.queueNext });
+      dlg.queueNext = false;
+    }
     ui.dChoices.innerHTML = '';
     if (n.c)
       n.c.forEach((ch, i) => {
@@ -1319,6 +1325,11 @@
     if (dlg.typing) finishTyping();
     const ch = n.c[i];
     A.click();
+    // השליח אומר את התשובה שבחר, והדמות עונה אחריו
+    if (G.voice) {
+      G.voice.speak(ch.t, 'player');
+      dlg.queueNext = true;
+    }
     if (ch.fx) ch.fx();
     if (!dlg) return;
     if (ch.go) showNode(ch.go);
@@ -1549,8 +1560,14 @@
   function refreshSettingsLabels() {
     $('p-sound').textContent = 'צליל: ' + (S.settings.sound ? 'פועל' : 'כבוי');
     $('p-shadows').textContent = 'גרפיקה: ' + (S.settings.shadows ? 'מלאה' : 'חסכונית');
+    $('p-voice').textContent = 'קולות דמויות: ' + (S.settings.voice !== false ? 'פועלים' : 'כבויים');
+    if (G.voice) {
+      G.voice.enabled = S.settings.voice !== false && S.settings.sound;
+      if (!G.voice.enabled) G.voice.stop();
+    }
   }
   function pauseGame() {
+    if (G.voice) G.voice.stop();
     mode = 'paused';
     refreshSettingsLabels();
     show($('pause'), true);
@@ -1588,6 +1605,12 @@
     A.setEnabled(S.settings.sound);
     refreshSettingsLabels();
     save();
+  });
+  $('p-voice').addEventListener('click', () => {
+    S.settings.voice = S.settings.voice === false;
+    refreshSettingsLabels();
+    save();
+    if (S.settings.voice && G.voice) G.voice.speak('שלום, שליח!', 'moshe');
   });
   $('p-shadows').addEventListener('click', () => {
     S.settings.shadows = !S.settings.shadows;
@@ -2107,6 +2130,63 @@
   }
 
   let saveT = 0;
+  // ================= שיחת טלפון ממשה: כשנפתחת משימה חדשה =================
+  let call = null, callWait = 0;
+  const MOSHE_PHONE = { id: 'moshe', name: 'משה', role: 'בטלפון 📞' };
+  function callReason() {
+    if (S.mission.status !== 'complete' || M.activeQuest()) return null;
+    const off = M.callOffer && M.callOffer();
+    if (off && !S.flags['call_' + off.id]) return off;
+    if (S.chabadLevel === 1 && !S.flags.call_up) return { id: 'up' };
+    return null;
+  }
+  function updateCall(dt) {
+    if (call) {
+      call.t += dt;
+      call.ring -= dt;
+      if (call.ring <= 0) {
+        call.ring = 1.7;
+        A.phone();
+      }
+      if (call.t > 16) endCall(false);
+      return;
+    }
+    if (mode !== 'play') return;
+    const off = callReason();
+    callWait = off ? callWait + dt : 0;
+    if (callWait > (off && off.id === 'up' ? 25 : 10)) {
+      callWait = 0;
+      S.flags['call_' + off.id] = true;
+      call = { off, t: 0, ring: 0 };
+      show($('call'), true);
+      save();
+    }
+  }
+  function endCall(answer) {
+    if (!call) return;
+    const off = call.off;
+    call = null;
+    show($('call'), false);
+    if (!answer) {
+      toast('📞 שיחה שלא נענתה ממשה — אפשר לדבר איתו ליד בית חב״ד');
+      return;
+    }
+    let nodes;
+    if (off.id === 'up') {
+      nodes = {
+        a: { s: 'npc', t: 'שליח! מדבר משה. שמעתי מה עשית הבוקר ברחובות — כל השכונה מדברת על זה!', go: 'b' },
+        b: { s: 'npc', t: 'עכשיו תקפוץ לבית חב״ד ותיכנס בדלת — הגיע הזמן לשדרג את המקום. ואחר כך יש לי בשבילך משימה חדשה.', c: [{ t: 'אני בדרך!' }] },
+      };
+    } else {
+      nodes = Object.assign({}, off.nodes);
+      nodes.a = Object.assign({}, nodes.a, { t: 'שליח! מדבר משה. ' + nodes.a.t });
+    }
+    if (drv) drv.v *= 0.3;
+    talkTo({ phone: true, id: 'moshe', def: MOSHE_PHONE, x: player.x, z: player.z, nodes });
+  }
+  $('call-yes').addEventListener('click', () => endCall(true));
+  $('call-no').addEventListener('click', () => endCall(false));
+
   // אזהרה כשמתקרבים לקצה המפה, עם חץ שמצביע חזרה לעיר
   let boundsOn = false;
   function updateBounds() {
@@ -2147,9 +2227,10 @@
     }
     computeInteract();
     updateBounds(dt);
+    updateCall(dt);
     // רדיו: נשמע מהרמקול שעל הגג, חלש יותר ככל שמתרחקים
     const vol = S.radio ? (S.inVan ? 1 : G.clamp(1 - Math.hypot(player.x - van.x, player.z - van.z) / 30, 0, 1) * 0.8) : 0;
-    A.setRadioVolume(vol);
+    A.setRadioVolume(G.voice && G.voice.speaking ? vol * 0.3 : vol);
     A.setEngine(!!drv && drv.type !== 'bike', drv ? Math.abs(drv.v) / drv.P.max : 0, drv ? drv.P.pitch : 1);
     if (S.radio && vol > 0.05 && (S.radio !== A.KOL || drv === van)) {
       noteT -= dt;

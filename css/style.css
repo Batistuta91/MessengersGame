@@ -311,3 +311,13 @@ body.touch .gpsb { width: 34px; height: 34px; font-size: 16px; }
 body.touch #bounds-warn { font-size: 16px; padding: 8px 14px; top: 28%; }
 #t-brake small { display: block; font-size: 10px; opacity: .85; font-weight: 700; }
 #t-brake.rev { background: rgba(255, 210, 63, .85); color: #222; }
+
+/* שיחת טלפון נכנסת */
+#call { position: fixed; top: 14%; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; background: rgba(15, 25, 40, .94); color: #fff; padding: 10px 14px; border: 2px solid #4cd964; border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,.5); z-index: 30; }
+#call .call-ic { font-size: 30px; animation: callShake .5s infinite; }
+#call .call-who b { display: block; font-size: 20px; }
+#call .call-who small { opacity: .8; }
+#call .btn { padding: 8px 14px; font-size: 16px; }
+#call-yes { background: #2ecc71; }
+body.touch #call kbd { display: none; }
+@keyframes callShake { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }

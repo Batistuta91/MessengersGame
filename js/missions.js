@@ -1074,6 +1074,12 @@
         if (menorah.g.visible && Math.hypot(player.x - MX, player.z - MZ) < 24) return [{ x: MX, z: MZ }];
         return [];
       },
+      // משימה חדשה שמשה יכול להציע בטלפון
+      callOffer() {
+        if (activeId()) return null;
+        const nx = nextQuest();
+        return nx && available(nx) && q(nx).status !== 'failed' ? { id: nx, nodes: OFFER[nx](false) } : null;
+      },
       canUpgrade(lv) {
         return lv === 3 && done('m4');
       },
