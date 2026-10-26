@@ -1216,8 +1216,8 @@
               }
             }
           }
-          if (rd.cls === 'major' && d >= nextL) {
-            nextL = d + 24 + rnd() * 6;
+          if ((rd.cls === 'major' || (rd.cls === 'minor' && rd.w >= 5)) && d >= nextL) {
+            nextL = d + (rd.cls === 'major' ? 24 : 32) + rnd() * 6;
             const lx = x + nx * (rd.w / 2 + 0.9), lz = z + nz * (rd.w / 2 + 0.9);
             if (treeOK(lx, lz, 0.6)) {
               lamps.push([lx, lz]);
@@ -1337,7 +1337,7 @@
     const postIM = new T.InstancedMesh(lampGeo, vcMat(), lamps.length);
     const bulbMat = new T.MeshBasicMaterial({ color: 0xcccccc });
     const bulbIM = new T.InstancedMesh(new T.BoxGeometry(0.36, 0.38, 0.36), bulbMat, lamps.length);
-    const glowGeo = new T.PlaneGeometry(8, 8);
+    const glowGeo = new T.PlaneGeometry(13, 13);
     glowGeo.rotateX(-Math.PI / 2);
     const glowMat = new T.MeshBasicMaterial({ map: G.glowTex('255,214,130'), transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending });
     const glowIM = new T.InstancedMesh(glowGeo, glowMat, lamps.length);
@@ -1351,6 +1351,7 @@
     });
     postIM.castShadow = true;
     scene.add(postIM, bulbIM, glowIM);
+    W.lamps = lamps;
     {
       const carGeo = G.mergeParts([
         { w: 1.8, h: 0.75, d: 3.9, y: 0.65, c: '#ffffff' },
@@ -1613,7 +1614,7 @@
       wallRes.emissiveIntensity = wallOff.emissiveIntensity = n * 0.9;
       for (const s of shopFronts) s.emissiveIntensity = n * 0.8;
       bulbMat.color.copy(dayBulb).lerp(nightBulb, n);
-      glowMat.opacity = n * 0.6;
+      glowMat.opacity = n * 0.85;
       cloudMat.opacity = 0.15 * (1 - n);
       for (const m of W.litSigns) m.emissiveIntensity = 0.3 + n * 0.7;
     };

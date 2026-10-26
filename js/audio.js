@@ -135,11 +135,14 @@
   A.onSongChange = (fn) => (onSong = fn);
   const songTitle = (f) => f.split('/').pop().replace(/\.[^.]+$/, '');
   function shuffle() {
+    const last = order.length ? order[order.length - 1] : -1;
     order = songs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
       [order[i], order[j]] = [order[j], order[i]];
     }
+    // שלא יתנגן אותו שיר פעמיים ברצף במעבר בין סבבים
+    if (order.length > 1 && order[0] === last) [order[0], order[1]] = [order[1], order[0]];
   }
   function loadSong(next) {
     if (!songs.length) return;

@@ -802,7 +802,11 @@
     const P = v.P;
     const k = axis();
     let throttle = k.y, steer = -k.x;
-    const brake = !!keys.Space;
+    let brake = !!keys.Space;
+    if (brake && v.v < 1) {
+      brake = false;
+      throttle = -1;
+    }
     if (touch.gas) throttle = 1;
     if (touch.brake) throttle = -1;
     if (joy.mag > 0.25) {
@@ -820,12 +824,31 @@
     else v.v = G.moveToward(v.v, 0, (v.type === 'bike' ? 2.5 : 5) * dt);
     if (v.v > MAX) v.v = G.moveToward(v.v, MAX, 30 * dt);
     else v.v = G.clamp(v.v, REV, MAX * (throttle > 0 ? Math.max(0.4, throttle) : 1));
-    const sf = G.clamp(Math.abs(v.v) / 4, 0, 1) * (1 - 0.4 * G.clamp(Math.abs(v.v) / Math.max(21, P.max), 0, 1)) * mods.grip * P.grip;
-    v.h += steer * 2.2 * sf * Math.sign(v.v) * dt;
+    let sf = G.clamp(Math.abs(v.v) / 4, 0, 1) * (1 - 0.4 * G.clamp(Math.abs(v.v) / Math.max(21, P.max), 0, 1)) * mods.grip * P.grip;
+    // תקועים מול קיר ולוחצים גז/רוורס: מאפשרים להסתובב לאט כדי לצאת
+    let dir = Math.sign(v.v);
+    if (v.blocked > 0 && Math.abs(throttle) > 0.1) {
+      sf = Math.max(sf, 0.35);
+      if (!dir) dir = Math.sign(throttle);
+    }
+    v.h += steer * 2.2 * sf * dir * dt;
+    if (v.v < -0.5 && !S.flags.revTip) {
+      S.flags.revTip = true;
+      toast('⬅ רוורס! הבלם הוא גם הילוך אחורי — ממשיכים ללחוץ כשהרכב עומד', 'gold');
+    }
+    if (isTouch) $('t-brake').classList.toggle('rev', v.v < -0.5);
     v.steer = steer;
     const fx = Math.sin(v.h), fz = Math.cos(v.h);
     v.x += fx * v.v * dt;
     v.z += fz * v.v * dt;
+    // גבול העיר: עצירה רכה (בלי התנגשות), כדי שאפשר יהיה להסתובב ולחזור
+    const lim = W.HALF - 3;
+    if (Math.abs(v.x) > lim || Math.abs(v.z) > lim) {
+      v.x = G.clamp(v.x, -lim, lim);
+      v.z = G.clamp(v.z, -lim, lim);
+      v.v *= Math.exp(-2.5 * dt);
+      v.blocked = 0.5;
+    }
     // התנגשות: עיגולים לאורך הרכב, מול העולם, דמויות, רכבים אחרים ותנועה
     const dyn = npcCircles(vanCircles([], v));
     let hit = false;
@@ -852,6 +875,8 @@
       }
     }
     bumpCd -= dt;
+    if (hit) v.blocked = 0.5;
+    else v.blocked = Math.max(0, (v.blocked || 0) - dt);
     const leanAmt = P.hide ? 0.06 : 0.22;
     v.lean = G.lerp(v.lean, steer * sf * leanAmt * Math.sign(v.v), 1 - Math.exp(-6 * dt));
     for (const w of v.m.wheels) w.rotation.x += (v.v * dt) / P.wheelR;
@@ -890,7 +915,7 @@
     }
     if (!S.flags.tankTip) {
       S.flags.tankTip = true;
-      toast(isTouch ? 'ג׳ויסטיק לנהיגה · גז ובלם מימין · צופר וניגון בכפתורים' : 'W/S גז ורוורס · A/D היגוי · רווח בלם · H צופר · R ניגון (בטנק)', 'gold');
+      toast(isTouch ? 'ג׳ויסטיק לנהיגה · גז ובלם מימין (הבלם הוא גם רוורס) · צופר וניגון בכפתורים' : 'W גז · S בלם ורוורס · A/D היגוי · רווח בלם (וגם רוורס) · H צופר · R רדיו', 'gold');
     }
     if (v.type !== 'tank' && !S.flags['tip_' + v.type]) {
       S.flags['tip_' + v.type] = true;
@@ -1540,6 +1565,24 @@
     if (drv && S.radio === A.KOL) A.kol(true);
   }
   $('p-resume').addEventListener('click', resumeGame);
+  $('p-unstick').addEventListener('click', () => {
+    const ps = SPOT.playerStart || { x: -12, z: -6.6, rot: 0 }, vs = SPOT.vanStart || { x: -12, z: -2, h: 0 };
+    if (drv) {
+      drv.x = vs.x;
+      drv.z = vs.z;
+      drv.h = vs.h;
+      drv.v = 0;
+      drv.blocked = 0;
+      tp.yaw = drv.h;
+    } else {
+      player.x = ps.x;
+      player.z = ps.z;
+      player.rot = ps.rot || 0;
+      tp.yaw = player.rot;
+    }
+    resumeGame();
+    toast('חזרתם לבית חב״ד 🏠', 'gold');
+  });
   $('p-sound').addEventListener('click', () => {
     S.settings.sound = !S.settings.sound;
     A.setEnabled(S.settings.sound);
@@ -1904,7 +1947,7 @@
     setText(
       ui.keys,
       drv
-        ? 'W/S גז·רוורס  ·  A/D היגוי  ·  רווח בלם  ·  H צופר  ·  R רדיו  ·  N שיר הבא  ·  E יציאה'
+        ? 'W גז  ·  S / רווח בלם ורוורס  ·  A/D היגוי  ·  H צופר  ·  R רדיו  ·  N שיר הבא  ·  E יציאה'
         : 'WASD תנועה  ·  ' + (third ? 'עכבר מבט  ·  ' : '') + 'Shift ריצה  ·  רווח קפיצה  ·  E פעולה  ·  B/T ניווט  ·  V מצלמה  ·  Esc השהיה'
     );
     updateStreetSign();
@@ -2064,6 +2107,25 @@
   }
 
   let saveT = 0;
+  // אזהרה כשמתקרבים לקצה המפה, עם חץ שמצביע חזרה לעיר
+  let boundsOn = false;
+  function updateBounds() {
+    if (!W.city) return;
+    const p = drv || player;
+    const edge = Math.max(Math.abs(p.x), Math.abs(p.z));
+    const on = edge > W.HALF - 22;
+    if (on !== boundsOn) {
+      boundsOn = on;
+      show($('bounds-warn'), on);
+      if (on) A.beep && A.beep();
+    }
+    if (on) {
+      // כיוון למרכז העיר ביחס לכיוון המצלמה (0 = קדימה על המסך)
+      const toC = Math.atan2(-p.x, -p.z);
+      const rel = G.wrapAngle(toC - tp.yaw);
+      $('bounds-arrow').style.transform = 'rotate(' + (-90 - (rel * 180) / Math.PI).toFixed(0) + 'deg)';
+    }
+  }
   function updatePlay(dt, t) {
     S.time = (S.time + (dt * M.timeRate()) / 60) % 24;
     M.update(dt);
@@ -2084,6 +2146,7 @@
       }
     }
     computeInteract();
+    updateBounds(dt);
     // רדיו: נשמע מהרמקול שעל הגג, חלש יותר ככל שמתרחקים
     const vol = S.radio ? (S.inVan ? 1 : G.clamp(1 - Math.hypot(player.x - van.x, player.z - van.z) / 30, 0, 1) * 0.8) : 0;
     A.setRadioVolume(vol);
@@ -2122,12 +2185,51 @@
     [8, 0x8ecae6, 0.65, 0.85, 0xfff4e0, 0],
     [16.5, 0x8ecae6, 0.65, 0.85, 0xfff4e0, 0],
     [18.5, 0xff8c42, 0.5, 0.55, 0xff9a5a, 0.45],
-    [20, 0x16224a, 0.44, 0.18, 0x7f8fff, 1],
-    [24, 0x0b1430, 0.42, 0.18, 0x8899ff, 1],
+    [20, 0x16224a, 0.56, 0.22, 0x7f8fff, 1],
+    [24, 0x0b1430, 0.54, 0.22, 0x8899ff, 1],
   ].map((e) => ({ h: e[0], sky: new T.Color(e[1]), hemi: e[2], sun: e[3], sunCol: new T.Color(e[4]), night: e[5] }));
   const hemiDay = new T.Color(0xe8f2ff), hemiNight = new T.Color(0x5566aa), rainSky = new T.Color(0x56606e);
   const sunDir = new T.Vector3();
   let lastNight = -1;
+  // תאורת לילה: אור אמיתי מעמודי התאורה הקרובים + פנסים קדמיים לרכב
+  const lampLights = [];
+  for (let i = 0; i < (isTouch ? 4 : 8); i++) {
+    const l = new T.PointLight(0xffd690, 0, 24, 1.4);
+    l.position.y = 4.3;
+    scene.add(l);
+    lampLights.push(l);
+  }
+  const headL = new T.SpotLight(0xfff2cc, 0, 48, 0.55, 0.55, 1.2);
+  scene.add(headL, headL.target);
+  let lampPickT = 0;
+  function updateNightLights(night) {
+    const lamps = W.lamps || [];
+    lampPickT -= 1 / 60;
+    if (lampPickT <= 0) {
+      lampPickT = 0.4;
+      const cx = camTarget.x, cz = camTarget.z;
+      const near = [];
+      for (const lp of lamps) {
+        const d = (lp[0] - cx) ** 2 + (lp[1] - cz) ** 2;
+        if (d < 3600) near.push([d, lp]);
+      }
+      near.sort((a, b) => a[0] - b[0]);
+      lampLights.forEach((l, i) => {
+        const n = near[i];
+        l.visible = !!n;
+        if (n) l.position.set(n[1][0], 4.3, n[1][1]);
+      });
+    }
+    const li = night > 0.3 ? (night - 0.3) / 0.7 : 0;
+    for (const l of lampLights) l.intensity = li * 1.6;
+    const v = drv;
+    headL.intensity = v && v.type !== 'bike' ? li * 2.2 : v ? li * 1.2 : 0;
+    if (v) {
+      const fx = Math.sin(v.h), fz = Math.cos(v.h);
+      headL.position.set(v.x + fx * 1.8, 1.3, v.z + fz * 1.8);
+      headL.target.position.set(v.x + fx * 20, 0, v.z + fz * 20);
+    }
+  }
   function updateEnv() {
     const h = mode === 'title' ? 18.9 : S.time;
     let i = 0;
@@ -2155,6 +2257,7 @@
       if (post) post.mat.uniforms.night.value = night;
     }
     W.update(clock);
+    updateNightLights(Math.max(0, lastNight));
     const ang = G.clamp((h - 6) / 12, 0, 1) * Math.PI;
     if (h > 6 && h < 18) sunDir.set(Math.cos(ang) * 0.9, 0.55 + 0.45 * Math.sin(ang), 0.55).normalize();
     else sunDir.set(0.4, 1, 0.6).normalize();

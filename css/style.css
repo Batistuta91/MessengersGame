@@ -303,3 +303,11 @@ body.touch #street-sign small { font-size: 11px; }
 .gpsb.on { background: #ffd23f; border-color: #fff; }
 body.touch #gps-btns { right: -44px; }
 body.touch .gpsb { width: 34px; height: 34px; font-size: 16px; }
+
+/* אזהרה ביציאה מתחומי העיר */
+#bounds-warn { position: fixed; top: 22%; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; background: rgba(150, 20, 20, 0.88); color: #fff; font-weight: 900; font-size: 22px; padding: 12px 22px; border: 3px solid #ffd23f; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,.5); pointer-events: none; animation: warnPulse 1.1s infinite; z-index: 15; }
+#bounds-warn i { font-style: normal; font-size: 30px; display: inline-block; color: #ffd23f; }
+@keyframes warnPulse { 50% { background: rgba(190, 30, 30, 0.95); } }
+body.touch #bounds-warn { font-size: 16px; padding: 8px 14px; top: 28%; }
+#t-brake small { display: block; font-size: 10px; opacity: .85; font-weight: 700; }
+#t-brake.rev { background: rgba(255, 210, 63, .85); color: #222; }
