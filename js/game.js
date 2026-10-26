@@ -1030,6 +1030,7 @@
   function computeInteract() {
     cur = null;
     if (drv) {
+      if (drv.auto) return;
       if (Math.abs(drv.v) < 2.5) {
         const qa = drv === van && M && M.vanAction();
         cur = qa ? { kind: 'quest', label: qa.label, run: qa.run, x: qa.x, z: qa.z } : { kind: 'exit', label: drv.P.hide ? 'יציאה מה' + (drv === van ? 'טנק' : 'מכונית') : 'לרדת מה' + drv.P.name };
@@ -2425,9 +2426,11 @@
       tp.lookT -= dt;
       if (tp.lookT <= 0) tp.vanOff = G.lerp(tp.vanOff, 0, 1 - Math.exp(-2 * dt));
       const back = drv.v < -1 ? Math.PI : 0;
-      tp.yaw = G.lerpAngle(tp.yaw, drv.h + back + tp.vanOff, 1 - Math.exp(-(tp.lookT > 0 ? 12 : 3.5) * dt));
-      dist = drv.P.cam + Math.abs(drv.v) * 0.08;
-      height = drv.P.camH;
+      // camLook: המצלמה פונה לנקודה מעניינת (למשל מעגל הריקודים)
+      const yawT = drv.camLook && tp.lookT <= 0 ? Math.atan2(drv.camLook.x - drv.x, drv.camLook.z - drv.z) : drv.h + back + tp.vanOff;
+      tp.yaw = G.lerpAngle(tp.yaw, yawT, 1 - Math.exp(-(tp.lookT > 0 ? 12 : drv.camLook ? 2 : 3.5) * dt));
+      dist = drv.P.cam + Math.abs(drv.v) * 0.08 + (drv.camLook ? 5 : 0);
+      height = drv.P.camH + (drv.camLook ? 5.5 : 0);
       tpTarget.set(drv.x, height, drv.z);
     } else {
       dist = tp.dist;

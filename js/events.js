@@ -309,6 +309,7 @@
       ev.state = 'dance';
       ev.danceT = 0;
       ev.bv.v = 0;
+      ev.bv.camLook = { x: st.cx, z: st.cz };
       A.cheer && A.cheer();
       api.toast(['🎉 החבר׳ה יורדים לרקוד!', '🎉 עוד תחנה — עוד ריקוד!', '🎉 תחנה אחרונה — שמחה גדולה!'][ev.i], 'gold');
       dancers.forEach((p, k) => {
@@ -368,6 +369,7 @@
       if (dT > 13.4) {
         dancers.forEach((p) => (p.group.visible = false));
         ev.cheered = false;
+        ev.bv.camLook = null;
         api.addJoy(4);
         api.toast('השכונה שמחה! +4 שמחה');
         if (ev.i < 2) driveTo(ev.i + 1);
