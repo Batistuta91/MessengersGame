@@ -3,7 +3,6 @@
 # שירים שמתנגנים רק במחשב הזה (הקלטות שאין רשות לפרסם)
 music/local/
 music/playlist.local.js
-music/local-only.txt
 
 # תוצרי אריזה
 dist/
