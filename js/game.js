@@ -571,6 +571,8 @@
     else if (c === 'KeyV') toggleCam();
     else if (c === 'KeyR') radio();
     else if (c === 'KeyN') nextSong();
+    else if (c === 'KeyB') setGps('home');
+    else if (c === 'KeyT') setGps('tank');
     else if (c === 'KeyH' || c === 'KeyQ') horn();
   }
   function virtualKey(code) {
@@ -1716,12 +1718,18 @@
     mmx.translate(-px, -pz);
     mmx.imageSmoothingEnabled = false;
     mmx.drawImage(mmStatic, -MEXT, -MEXT, 2 * MEXT, 2 * MEXT);
-    // בית חב״ד
-    const chx = W.chabadFrame ? W.chabadFrame.x : -12, chz = W.chabadFrame ? W.chabadFrame.z : -12;
-    mmx.fillStyle = '#ffd23f';
-    mmx.fillRect(chx - 6 / mmScale, chz - 6 / mmScale, 12 / mmScale, 12 / mmScale);
-    mmx.fillStyle = '#1b3a8a';
-    mmx.fillRect(chx - 3.5 / mmScale, chz - 3.5 / mmScale, 7 / mmScale, 7 / mmScale);
+    // מסלול ה-GPS: קו צבעוני לאורך הרחובות, עם שוליים כהים כמו ב-GTA
+    if (gps.route && gps.route.length > 1) {
+      mmx.lineJoin = mmx.lineCap = 'round';
+      for (const [w, col] of [[9, 'rgba(10,14,30,0.55)'], [5.5, gps.color]]) {
+        mmx.strokeStyle = col;
+        mmx.lineWidth = w / mmScale;
+        mmx.beginPath();
+        mmx.moveTo(gps.route[0][0], gps.route[0][1]);
+        for (let i = 1; i < gps.route.length; i++) mmx.lineTo(gps.route[i][0], gps.route[i][1]);
+        mmx.stroke();
+      }
+    }
     M.mapDots(dot);
     if (EV) EV.mapDots(dot);
     for (const n of npcs) {
@@ -1730,11 +1738,40 @@
       const col = { alert: '#ff8c42', music: '#b07cff', wait: '#9aa3b5', ok: '#3ecf72', mission: '#3b6fd8', hint: '#dfe7f5', star: '#ffd23f' }[k];
       dot(n.x, n.z, k === 'ok' ? 3.5 : 5, col, '#13213f');
     }
-    if (drv !== van) {
-      mmx.fillStyle = '#ffffff';
-      mmx.fillRect(van.x - 4 / mmScale, van.z - 4 / mmScale, 8 / mmScale, 8 / mmScale);
-    }
     mmx.restore();
+    // סמלים שנשארים על שפת המפה גם כשהם רחוקים: בית חב״ד, הטנק והיעד
+    const rim = (x, z, draw) => {
+      const dx = (x - px) * mmScale, dz = (z - pz) * mmScale;
+      let sx = dx * Math.cos(th) - dz * Math.sin(th), sy = dx * Math.sin(th) + dz * Math.cos(th);
+      const d = Math.hypot(sx, sy), lim = R - 13;
+      if (d > lim) {
+        sx *= lim / d;
+        sy *= lim / d;
+      }
+      draw(C + sx, C + sy, d > lim);
+    };
+    const badge = (x, y, bg, fg, ch, ring) => {
+      mmx.beginPath();
+      mmx.arc(x, y, 10, 0, Math.PI * 2);
+      mmx.fillStyle = bg;
+      mmx.fill();
+      mmx.lineWidth = 2;
+      mmx.strokeStyle = ring;
+      mmx.stroke();
+      mmx.fillStyle = fg;
+      mmx.font = 'bold 12px Arial, "Segoe UI Emoji", sans-serif';
+      mmx.textAlign = 'center';
+      mmx.textBaseline = 'middle';
+      mmx.fillText(ch, x, y + 1);
+    };
+    const home = W.places.chabadDoor || { x: -12, z: -7 };
+    rim(home.x, home.z, (x, y) => badge(x, y, '#1b3a8a', '#ffd23f', 'ח', '#ffd23f'));
+    if (drv !== van) rim(van.x, van.z, (x, y, edge) => badge(x, y, '#ffffff', '#1b3a8a', '🚐', edge ? '#ffd23f' : '#13213f'));
+    const dest = gpsTarget();
+    if (dest) rim(dest.x, dest.z, (x, y, edge) => {
+      if (!edge) return;
+      badge(x, y, gps.color, '#13213f', '◆', '#ffffff');
+    });
     // החץ של השחקן — במרכז, מכוון לפי הכיוון שלו
     const hx = drv ? Math.sin(drv.h) : Math.sin(player.rot), hz = drv ? Math.cos(drv.h) : Math.cos(player.rot);
     const ang = Math.atan2(hz, hx) + th;
@@ -1868,7 +1905,7 @@
       ui.keys,
       drv
         ? 'W/S גז·רוורס  ·  A/D היגוי  ·  רווח בלם  ·  H צופר  ·  R רדיו  ·  N שיר הבא  ·  E יציאה'
-        : 'WASD תנועה  ·  ' + (third ? 'עכבר מבט  ·  ' : '') + 'Shift ריצה  ·  רווח קפיצה  ·  E/Enter פעולה  ·  V מצלמה  ·  Esc השהיה'
+        : 'WASD תנועה  ·  ' + (third ? 'עכבר מבט  ·  ' : '') + 'Shift ריצה  ·  רווח קפיצה  ·  E פעולה  ·  B/T ניווט  ·  V מצלמה  ·  Esc השהיה'
     );
     updateStreetSign();
     if (cur && mode === 'play') {
@@ -1950,6 +1987,64 @@
       }
     }
   }
+  // ================= GPS =================
+  // יעד ידני (בית חב״ד / הטנק) גובר על יעד המשימה; המסלול מחושב מחדש כל ~0.7 שנ׳
+  const gps = { dest: null, route: null, color: '#b07cff', t: 0, hintT: 40 };
+  function gpsTarget() {
+    if (gps.dest === 'home') return W.places.chabadDoor;
+    if (gps.dest === 'tank') return van;
+    return nearestPending();
+  }
+  function refreshGpsBtns() {
+    $('gps-home').classList.toggle('on', gps.dest === 'home');
+    $('gps-tank').classList.toggle('on', gps.dest === 'tank');
+  }
+  function setGps(kind) {
+    if (gps.dest === kind) {
+      gps.dest = null;
+      toast('📍 הניווט בוטל');
+    } else {
+      gps.dest = kind;
+      toast(kind === 'home' ? '📍 מסלול לבית חב״ד — עקבו אחרי הקו הצהוב במפה' : '📍 מסלול לטנק המבצעים — עקבו אחרי הקו הצהוב במפה', 'gold');
+    }
+    A.click();
+    gps.t = 0;
+    refreshGpsBtns();
+  }
+  function updateGps(dt) {
+    const px = drv ? drv.x : player.x, pz = drv ? drv.z : player.z;
+    if (gps.dest === 'tank' && drv === van) {
+      gps.dest = null;
+      refreshGpsBtns();
+    }
+    const t = gpsTarget();
+    if (gps.dest && t && Math.hypot(t.x - px, t.z - pz) < 9) {
+      toast(gps.dest === 'home' ? 'הגעתם לבית חב״ד 🏠' : 'הנה טנק המבצעים! 🚐', 'gold');
+      gps.dest = null;
+      refreshGpsBtns();
+    }
+    gps.color = gps.dest ? '#ffd23f' : '#c084ff';
+    // תזכורת: הטנק רחוק
+    if (!drv && !gps.dest && Math.hypot(van.x - px, van.z - pz) > 90) {
+      gps.hintT -= dt;
+      if (gps.hintT <= 0) {
+        gps.hintT = 75;
+        toast('🚐 טנק המבצעים רחוק — ' + (isTouch ? 'לחצו 🚐 ליד המפה' : 'לחצו T') + ' כדי לנווט אליו');
+      }
+    }
+    if (!t || !W.route) {
+      gps.route = null;
+      return;
+    }
+    gps.t -= dt;
+    if (gps.t <= 0) {
+      gps.t = 0.7;
+      gps.route = W.route(px, pz, t.x, t.z);
+    } else if (gps.route) gps.route[0] = [px, pz];
+  }
+  $('gps-home').addEventListener('click', () => setGps('home'));
+  $('gps-tank').addEventListener('click', () => setGps('tank'));
+
   function nearestPending() {
     const m = S.mission;
     if (m.status !== 'active') {
@@ -1975,6 +2070,7 @@
     if (drv) updateVehicle(drv, dt);
     else updatePlayer(dt);
     for (const v of vehicles) v.hornCd -= dt;
+    updateGps(dt);
     if (EV) EV.update(dt, S.mission.status === 'active' || !!M.activeQuest() || mode !== 'play');
     A.ambience(dt, Math.max(0, lastNight), !!W.city, TR ? TR.nearby / 4 : 0);
     const m = S.mission;
@@ -2220,7 +2316,7 @@
     poseRider();
 
     // סמנים
-    const target = mode === 'play' ? nearestPending() : null;
+    const target = mode === 'play' ? gpsTarget() : null;
     navMark.visible = !!target;
     if (target) {
       navMark.position.set(target.x, (target.r ? 7 : 3.9) + Math.sin(clock * 2.5) * 0.25, target.z);

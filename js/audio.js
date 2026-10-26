@@ -133,7 +133,7 @@
   A.KOL = 9;
   A.hasSongs = () => songs.length > 0;
   A.onSongChange = (fn) => (onSong = fn);
-  const songTitle = (f) => f.replace(/\.[^.]+$/, '');
+  const songTitle = (f) => f.split('/').pop().replace(/\.[^.]+$/, '');
   function shuffle() {
     order = songs.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
@@ -163,7 +163,7 @@
         if (songs.length > 1) setTimeout(() => loadSong(true), 300);
       });
     }
-    songEl.src = 'music/' + encodeURIComponent(file);
+    songEl.src = 'music/' + file.split('/').map(encodeURIComponent).join('/');
     songEl.volume = 0;
     if (onSong) onSong(songTitle(file));
   }

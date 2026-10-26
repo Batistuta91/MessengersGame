@@ -138,6 +138,17 @@
     const MAJOR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link']);
     const PATHS = new Set(['footway', 'path', 'cycleway', 'steps', 'pedestrian', 'track', 'bridleway', 'corridor']);
     const roads = [];
+    const GN = [], gmap = new Map();
+    function gnode(x, z) {
+      const k = Math.round(x * 2) + ',' + Math.round(z * 2);
+      let n = gmap.get(k);
+      if (!n) {
+        n = { id: GN.length, x, z, adj: [] };
+        gmap.set(k, n);
+        GN.push(n);
+      }
+      return n;
+    }
     for (const r of D.roads) {
       const t = r.t.replace('_link', '');
       if (t === 'construction' || t === 'proposed' || t === 'platform') continue;
@@ -150,7 +161,19 @@
       roads.push(rd);
       for (let i = 0; i < pts.length - 1; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
-        gridAdd({ t: 4, ax, az, bx, bz, w, cls, rd, drive: cls !== 'path' }, Math.min(ax, bx) - w, Math.min(az, bz) - w, Math.max(ax, bx) + w, Math.max(az, bz) + w);
+        const item = { t: 4, ax, az, bx, bz, w, cls, rd, drive: cls !== 'path' };
+        if (item.drive) {
+          // גרף הכבישים לניווט (GPS)
+          const na = gnode(ax, az), nb = gnode(bx, bz);
+          if (na !== nb) {
+            const L = Math.hypot(bx - ax, bz - az);
+            na.adj.push(nb.id, L);
+            nb.adj.push(na.id, L);
+          }
+          item.na = na;
+          item.nb = nb;
+        }
+        gridAdd(item, Math.min(ax, bx) - w, Math.min(az, bz) - w, Math.max(ax, bx) + w, Math.max(az, bz) + w);
       }
     }
     // הנקודה הקרובה ביותר על כביש (לנסיעה)
@@ -173,6 +196,77 @@
     }
     W.nearestRoad = nearestRoad;
     W.roadList = roads;
+
+    // ================= GPS: המסלול הקצר ביותר ברשת הכבישים (A*) =================
+    const gCost = new Float64Array(GN.length), gPrev = new Int32Array(GN.length), gSeen = new Uint32Array(GN.length);
+    let gStamp = 0;
+    W.route = function (sx, sz, tx, tz) {
+      // מעדיפים רחוב אמיתי (לא דרך שירות/חניון) אם יש כזה בקרבת מקום
+      const snap = (x, z) => {
+        const real = nearestRoad(x, z, 64, (o) => o.rd.t !== 'service');
+        const any = nearestRoad(x, z, 400);
+        return real && (!any || real.d < any.d + 25) ? real : any;
+      };
+      const s = snap(sx, sz), t = snap(tx, tz);
+      if (!s || !t || !s.seg.na || !t.seg.na) return null;
+      if (s.seg === t.seg) return [[sx, sz], [s.x, s.z], [t.x, t.z], [tx, tz]];
+      gStamp++;
+      const goalA = t.seg.na, goalB = t.seg.nb;
+      const toGoal = { [goalA.id]: Math.hypot(goalA.x - t.x, goalA.z - t.z), [goalB.id]: Math.hypot(goalB.x - t.x, goalB.z - t.z) };
+      const heap = [];
+      const push = (id, f) => {
+        heap.push([f, id]);
+        let i = heap.length - 1;
+        while (i > 0) {
+          const p = (i - 1) >> 1;
+          if (heap[p][0] <= heap[i][0]) break;
+          [heap[p], heap[i]] = [heap[i], heap[p]];
+          i = p;
+        }
+      };
+      const pop = () => {
+        const top = heap[0], last = heap.pop();
+        if (heap.length) {
+          heap[0] = last;
+          let i = 0;
+          for (;;) {
+            const l = i * 2 + 1, r = l + 1;
+            let m = i;
+            if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+            if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+            if (m === i) break;
+            [heap[m], heap[i]] = [heap[i], heap[m]];
+            i = m;
+          }
+        }
+        return top;
+      };
+      const relax = (id, c, prev) => {
+        if (gSeen[id] === gStamp && gCost[id] <= c) return;
+        gSeen[id] = gStamp;
+        gCost[id] = c;
+        gPrev[id] = prev;
+        push(id, c + Math.hypot(GN[id].x - t.x, GN[id].z - t.z));
+      };
+      for (const n of [s.seg.na, s.seg.nb]) relax(n.id, Math.hypot(n.x - s.x, n.z - s.z), -1);
+      let best = -1, bestC = 1e18, guard = 0;
+      while (heap.length && guard++ < 60000) {
+        const [f, id] = pop();
+        if (f >= bestC) break;
+        if (gCost[id] + Math.hypot(GN[id].x - t.x, GN[id].z - t.z) < f - 1e-6) continue;
+        if (id in toGoal && gCost[id] + toGoal[id] < bestC) {
+          bestC = gCost[id] + toGoal[id];
+          best = id;
+        }
+        const adj = GN[id].adj;
+        for (let k = 0; k < adj.length; k += 2) relax(adj[k], gCost[id] + adj[k + 1], id);
+      }
+      if (best < 0) return null;
+      const pts = [];
+      for (let id = best; id >= 0; id = gPrev[id]) pts.push([GN[id].x, GN[id].z]);
+      pts.reverse();
+      return [[sx, sz], [s.x, s.z]].concat(pts, [[t.x, t.z], [tx, tz]]);
+    };
 
     // ================= טקסטורות =================
     const grassDraw = (base, n) => (g) => {

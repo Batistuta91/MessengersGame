@@ -267,7 +267,7 @@ body.touch #prompt { bottom: auto; top: 64px; }
 body.touch #toasts { bottom: auto; top: 100px; }
 body.touch #minimap-wrap { bottom: auto; top: 44px; width: 120px; }
 body.touch #minimap { width: 120px; height: 120px; border-width: 3px; }
-body.touch #street-sign { bottom: auto; top: 44px; right: auto; left: 150px; min-width: 0; padding: 4px 10px; }
+body.touch #street-sign { bottom: auto; top: 44px; right: auto; left: 186px; min-width: 0; padding: 4px 10px; }
 body.touch #street-sign b { font-size: 16px; }
 body.touch #street-sign small { font-size: 11px; }
 
@@ -296,3 +296,10 @@ body.touch #street-sign small { font-size: 11px; }
   #rotate div { font-size: 64px; animation: spin 2s infinite; }
 }
 @keyframes spin { 50% { transform: rotate(90deg); } }
+
+/* כפתורי ניווט ליד המפה */
+#gps-btns { position: absolute; top: 2px; right: -46px; display: flex; flex-direction: column; gap: 6px; }
+.gpsb { width: 38px; height: 38px; border-radius: 50%; border: 2px solid #f4f1e8; background: rgba(10, 14, 30, 0.75); font-size: 18px; box-shadow: 0 3px 6px rgba(0,0,0,.45); padding: 0; }
+.gpsb.on { background: #ffd23f; border-color: #fff; }
+body.touch #gps-btns { right: -44px; }
+body.touch .gpsb { width: 34px; height: 34px; font-size: 16px; }
