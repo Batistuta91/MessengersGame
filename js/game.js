@@ -1479,7 +1479,7 @@
     m.targets[n.id] = 'accepted';
     addJoy(14);
     addCommunity(1);
-    W.placeLights[n.id].visible = true;
+    if (W.placeLights[n.id]) W.placeLights[n.id].visible = true;
     toast(n.def.name + ' הניח תפילין! +14 שמחה · הפינה שלו נדלקה באורות', 'gold');
     if (n.id === 'cohen' && S.flags.cohenChallot) setTimeout(() => toast('מר כהן ישלח חלות לשבת 🍞'), 900);
     save();
@@ -1742,7 +1742,7 @@
   // ================= החלת מצב שמור =================
   sun.castShadow = S.settings.shadows;
   W.setChabadLevel(S.chabadLevel);
-  for (const id of TARGET_IDS) if (S.mission.targets[id] === 'accepted') W.placeLights[id].visible = true;
+  for (const id of TARGET_IDS) if (S.mission.targets[id] === 'accepted' && W.placeLights[id]) W.placeLights[id].visible = true;
   if (S.mission.status === 'complete') spawnExtraWalkers();
   if (S.mission.status === 'complete' && !S.flags.resultsSeen && CITY !== 'pt') pendingResults = true;
   player.p.group.visible = !drv || !drv.P.hide;
