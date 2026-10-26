@@ -321,3 +321,11 @@ body.touch #bounds-warn { font-size: 16px; padding: 8px 14px; top: 28%; }
 #call-yes { background: #2ecc71; }
 body.touch #call kbd { display: none; }
 @keyframes callShake { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
+
+/* מעבר בין ערים */
+#travel { position: fixed; inset: 0; z-index: 90; background: linear-gradient(#1b3a8a, #0b1430); display: flex; align-items: center; justify-content: center; color: #fff; }
+#travel .tv-box { text-align: center; }
+#travel b { display: block; font-size: 30px; color: #ffd23f; margin-top: 10px; }
+#travel small { opacity: .8; font-size: 16px; }
+#travel .tv-van { font-size: 64px; animation: tvDrive 1.6s linear infinite; }
+@keyframes tvDrive { 0% { transform: translateX(120px); } 100% { transform: translateX(-120px); } }

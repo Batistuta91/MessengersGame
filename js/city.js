@@ -7,7 +7,7 @@
   G.buildCity = function (scene, D) {
     const rnd = G.rng(5150);
     const W = {
-      city: true, noFade: true, HALF: 640, mapExtent: 700,
+      city: true, noFade: true, HALF: D.half || 640, mapExtent: (D.half || 640) + 60, cityId: D.id || 'hod', cityName: D.name || 'הוד השרון', cityEn: D.id === 'pt' ? 'Petah Tikva' : 'Hod HaSharon',
       buildings: [], litSigns: [], placeLights: {}, places: [], spots: {}, paths: [], mapDirty: false,
     };
     const lam = (c, e) => new T.MeshLambertMaterial(Object.assign({ color: c }, e || {}));
@@ -250,7 +250,7 @@
       };
       for (const n of [s.seg.na, s.seg.nb]) relax(n.id, Math.hypot(n.x - s.x, n.z - s.z), -1);
       let best = -1, bestC = 1e18, guard = 0;
-      while (heap.length && guard++ < 60000) {
+      while (heap.length && guard++ < 400000) {
         const [f, id] = pop();
         if (f >= bestC) break;
         if (gCost[id] + Math.hypot(GN[id].x - t.x, GN[id].z - t.z) < f - 1e-6) continue;
@@ -286,8 +286,9 @@
         g.fillRect((rnd() * 32) | 0, (rnd() * 32) | 0, 2, 1);
       }
     }, true);
-    groundTex.repeat.set(400, 400);
-    const ground = new T.Mesh(new T.PlaneGeometry(2400, 2400), lam(0xffffff, { map: groundTex }));
+    const GS = Math.max(2400, (W.HALF + 600) * 2);
+    groundTex.repeat.set(GS / 6, GS / 6);
+    const ground = new T.Mesh(new T.PlaneGeometry(GS, GS), lam(0xffffff, { map: groundTex }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.02;
     ground.receiveShadow = true;
@@ -594,7 +595,7 @@
       if (Math.abs(A) < 4) continue;
       cx /= 6 * A;
       cz /= 6 * A;
-      const b = { p, n, area: Math.abs(A), cx, cz, minx, maxx, minz, maxz, kind: d.k, name: d.n, amen: d.a, lv: d.l, hm: d.h, used: false };
+      const b = { p, n, area: Math.abs(A), cx, cz, minx, maxx, minz, maxz, kind: d.k, name: d.n, amen: d.a, lv: d.l, hm: d.h, used: false, idx: B.length };
       b.levels = levelsFor(b);
       b.h = b.levels * 3.2;
       b.office = d.k === 'office' || (b.levels >= 6 && rnd() < 0.4);
@@ -605,12 +606,18 @@
     }
     W.B = B;
 
-    // בניית גיאומטריה מאוחדת לפי אריחים (קריאת ציור אחת לכל סוג בכל אריח)
+    // ================= אריחים: בונים רק את מה שקרוב לשחקן =================
+    // עיר גדולה (פתח תקווה: ~14 אלף בניינים) לא נכנסת לזיכרון של טלפון בבת אחת.
+    // הנתונים (התנגשויות, מקומות) נשמרים לכל העיר; הגיאומטריה נבנית לאריח כשמתקרבים ומשתחררת כשמתרחקים.
     const TILE = 110, tiles = new Map();
-    const tileOf = (x, z) => {
-      const k = Math.floor(x / TILE) + ',' + Math.floor(z / TILE);
+    const tileKey = (x, z) => Math.floor(x / TILE) + ',' + Math.floor(z / TILE);
+    const tileAt = (x, z) => {
+      const k = tileKey(x, z);
       let t = tiles.get(k);
-      if (!t) tiles.set(k, (t = { res: { p: [], n: [], u: [], c: [] }, off: { p: [], n: [], u: [], c: [] }, roof: { p: [], n: [], u: [], c: [] }, gab: { p: [], n: [], u: [], c: [] } }));
+      if (!t) {
+        const [i, j] = k.split(',').map(Number);
+        tiles.set(k, (t = { key: k, cx: (i + 0.5) * TILE, cz: (j + 0.5) * TILE, B: [], trees: [], palms: [], lamps: [], cars: [], shops: [], grp: null, seed: (i * 7919 + j * 104729) >>> 0 }));
+      }
       return t;
     };
     function pushV(buf, x, y, z, nx, ny, nz, u, v, c) {
@@ -620,10 +627,9 @@
       buf.c.push(c.r, c.g, c.b);
     }
     const tmpC = new T.Color();
-    function wallsFor(buf, b, y0, y1, uOff) {
-      const p = b.p, n = b.n;
-      let acc = uOff;
-      b.edges = b.edges || [];
+    // צלעות הבניין (לחזיתות, מרפסות וחנויות) — מחושבות לכל העיר, בלי גיאומטריה
+    function edgesOf(b) {
+      const p = b.p, n = b.n, out = [];
       for (let i = 0; i < n; i++) {
         const ax = p[i * 2], az = p[i * 2 + 1], bx = p[((i + 1) % n) * 2], bz = p[((i + 1) % n) * 2 + 1];
         const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
@@ -634,7 +640,15 @@
           nx = -nx;
           nz = -nz;
         }
-        if (y0 === 0) b.edges.push({ ax, az, bx, bz, L, mx, mz, nx, nz });
+        out.push({ ax, az, bx, bz, L, mx, mz, nx, nz });
+      }
+      return out;
+    }
+    function wallsFor(buf, b, y0, y1, uOff) {
+      let acc = uOff;
+      for (const e of b.edges) {
+        const { ax, az, bx, bz, L, nx, nz } = e;
+        const dx = bx - ax, dz = bz - az;
         const flip = Math.abs(nx - -dz / L) > 1e-6 || Math.abs(nz - dx / L) > 1e-6;
         const ys = y0 === 0 && y1 > 4.6 ? [0, 4.5, y1] : [y0, y1];
         for (let r = 0; r < ys.length - 1; r++) {
@@ -666,17 +680,22 @@
         for (const v of [A, Bv, C]) pushV(buf, v.x, y, v.y, 0, 1, 0, v.x / 8, v.y / 8, col);
       }
     }
-    // גג רעפים לבתים מלבניים קטנים
-    function gableFor(buf, b) {
-      if (b.n !== 4) return false;
+    // האם אפשר גג רעפים (מלבן בערך)
+    function canGable(b) {
+      if (b.n !== 4) return null;
       const e = [];
       for (let i = 0; i < 4; i++) {
         const ax = b.p[i * 2], az = b.p[i * 2 + 1], bx = b.p[((i + 1) % 4) * 2], bz = b.p[((i + 1) % 4) * 2 + 1];
         e.push({ dx: bx - ax, dz: bz - az, L: Math.hypot(bx - ax, bz - az) });
       }
-      // מלבן בערך: צלעות נגדיות שוות וזוויות ישרות
-      if (Math.abs(e[0].L - e[2].L) > 0.15 * e[0].L || Math.abs(e[1].L - e[3].L) > 0.15 * e[1].L) return false;
-      if (Math.abs(e[0].dx * e[1].dx + e[0].dz * e[1].dz) / (e[0].L * e[1].L) > 0.12) return false;
+      if (Math.abs(e[0].L - e[2].L) > 0.15 * e[0].L || Math.abs(e[1].L - e[3].L) > 0.15 * e[1].L) return null;
+      if (Math.abs(e[0].dx * e[1].dx + e[0].dz * e[1].dz) / (e[0].L * e[1].L) > 0.12) return null;
+      return e;
+    }
+    // גג רעפים לבתים מלבניים קטנים
+    function gableFor(buf, b) {
+      const e = canGable(b);
+      if (!e) return false;
       const long = e[0].L >= e[1].L ? e[0] : e[1], Lx = Math.max(e[0].L, e[1].L), Lz = Math.min(e[0].L, e[1].L);
       const ux = long.dx / long.L, uz = long.dz / long.L, vx = -uz, vz = ux;
       const a = Lx / 2 + 0.35, end = Lx / 2, bw = Lz / 2 + 0.45, rh = Lz * 0.36, y0 = b.h;
@@ -705,44 +724,11 @@
       }
       return true;
     }
-
-    const solar = [];
     for (const b of B) {
-      const t = tileOf(b.cx, b.cz);
-      wallsFor(b.office ? t.off : t.res, b, 0, b.h, rnd() * 64);
+      b.edges = edgesOf(b);
       const isHouse = HOUSE_K.has(b.kind) || (b.kind === 'yes' && b.area > 70 && b.area < 260 && b.levels <= 2);
-      if (isHouse && rnd() < 0.55 && gableFor(t.gab, b)) {
-        b.gable = true;
-      } else {
-        const g = 0.72 + rnd() * 0.14;
-        roofFor(t.roof, b, b.h, new T.Color(g, g * 0.98, g * 0.95));
-        // דוד שמש על הגג — סמל של כל עיר בישראל
-        if (!b.office && b.area > 50 && b.area < 1200 && b.kind !== 'garage' && b.kind !== 'roof') {
-          const cnt = b.area < 250 ? 1 : b.area < 600 ? 2 : 3;
-          for (let k = 0; k < cnt; k++) {
-            const x = b.cx + (rnd() - 0.5) * Math.min(6, b.maxx - b.minx - 2), z = b.cz + (rnd() - 0.5) * Math.min(6, b.maxz - b.minz - 2);
-            if (pip(x, z, b.p)) solar.push([x, b.h, z, ((rnd() * 4) | 0) * (Math.PI / 2)]);
-          }
-        }
-      }
-    }
-    for (const t of tiles.values()) {
-      for (const [key, mat, cast] of [['res', wallRes, true], ['off', wallOff, true], ['roof', roofMat, false], ['gab', gableMat, true]]) {
-        const bf = t[key];
-        if (!bf.p.length) continue;
-        const g = new T.BufferGeometry();
-        g.setAttribute('position', new T.Float32BufferAttribute(bf.p, 3));
-        g.setAttribute('normal', new T.Float32BufferAttribute(bf.n, 3));
-        g.setAttribute('uv', new T.Float32BufferAttribute(bf.u, 2));
-        g.setAttribute('color', new T.Float32BufferAttribute(bf.c, 3));
-        g.computeBoundingSphere();
-        const m = new T.Mesh(g, mat);
-        m.castShadow = cast;
-        m.receiveShadow = true;
-        m.userData = { wall: mat, roof: mat, mats: [], fade: 1, tr: false, hit: false };
-        scene.add(m);
-        W.buildings.push(m);
-      }
+      b.gable = isHouse && rnd() < 0.55 && !!canGable(b);
+      tileAt(b.cx, b.cz).B.push(b);
     }
     const solarGeo = G.mergeParts([
       { w: 1.3, h: 0.06, d: 1.0, y: 0.5, z: 0.25, rx: -0.55, c: '#22406a' },
@@ -750,16 +736,66 @@
       { w: 0.06, h: 0.7, d: 0.06, x: -0.5, y: 0.35, z: -0.4, c: '#777' },
       { w: 0.06, h: 0.7, d: 0.06, x: 0.5, y: 0.35, z: -0.4, c: '#777' },
     ]);
-    const solarIM = new T.InstancedMesh(solarGeo, vcMat(), solar.length);
+    const solarMat = vcMat();
     const m4 = new T.Matrix4(), q4 = new T.Quaternion(), s3 = new T.Vector3(1, 1, 1), p3 = new T.Vector3(), UP = new T.Vector3(0, 1, 0);
-    solar.forEach(([x, y, z, ry], i) => {
-      q4.setFromAxisAngle(UP, ry);
-      p3.set(x, y, z);
-      m4.compose(p3, q4, s3);
-      solarIM.setMatrixAt(i, m4);
-    });
-    solarIM.castShadow = true;
-    scene.add(solarIM);
+    // אוסף מופעים (עצים, פנסים...) לאריח אחד; frustumCulled כבוי כי הם מפוזרים על כל האריח
+    function inst(grp, geo, mat, n, fill, cast) {
+      if (!n) return null;
+      const im = new T.InstancedMesh(geo, mat, n);
+      for (let i = 0; i < n; i++) fill(im, i);
+      im.castShadow = !!cast;
+      im.frustumCulled = false;
+      grp.add(im);
+      return im;
+    }
+    function meshOf(bf, mat) {
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(bf.p, 3));
+      g.setAttribute('normal', new T.Float32BufferAttribute(bf.n, 3));
+      g.setAttribute('uv', new T.Float32BufferAttribute(bf.u, 2));
+      g.setAttribute('color', new T.Float32BufferAttribute(bf.c, 3));
+      g.computeBoundingSphere();
+      return new T.Mesh(g, mat);
+    }
+    // בניינים של אריח: קירות, גגות, רעפים ודודי שמש
+    function buildTileBuildings(t, r) {
+      const bufs = { res: { p: [], n: [], u: [], c: [] }, off: { p: [], n: [], u: [], c: [] }, roof: { p: [], n: [], u: [], c: [] }, gab: { p: [], n: [], u: [], c: [] } };
+      const solar = [];
+      for (const b of t.B) {
+        wallsFor(b.office ? bufs.off : bufs.res, b, 0, b.h, r() * 64);
+        if (b.gable) gableFor(bufs.gab, b);
+        else {
+          const g = 0.72 + r() * 0.14;
+          roofFor(bufs.roof, b, b.h, new T.Color(g, g * 0.98, g * 0.95));
+          // דוד שמש על הגג — סמל של כל עיר בישראל
+          if (!b.office && b.area > 50 && b.area < 1200 && b.kind !== 'garage' && b.kind !== 'roof') {
+            const cnt = b.area < 250 ? 1 : b.area < 600 ? 2 : 3;
+            for (let k = 0; k < cnt; k++) {
+              const x = b.cx + (r() - 0.5) * Math.min(6, b.maxx - b.minx - 2), z = b.cz + (r() - 0.5) * Math.min(6, b.maxz - b.minz - 2);
+              if (pip(x, z, b.p)) solar.push([x, b.h, z, ((r() * 4) | 0) * (Math.PI / 2)]);
+            }
+          }
+        }
+      }
+      for (const [key, mat, cast] of [['res', wallRes, true], ['off', wallOff, true], ['roof', roofMat, false], ['gab', gableMat, true]]) {
+        const bf = bufs[key];
+        if (!bf.p.length) continue;
+        const m = meshOf(bf, mat);
+        m.castShadow = cast;
+        m.receiveShadow = true;
+        m.userData = { wall: mat, roof: mat, mats: [], fade: 1, tr: false, hit: false, own: true };
+        t.grp.add(m);
+        t.bmeshes.push(m);
+      }
+      inst(t.grp, solarGeo, solarMat, solar.length, (im, i) => {
+        const [x, y, z, ry] = solar[i];
+        q4.setFromAxisAngle(UP, ry);
+        p3.set(x, y, z);
+        s3.set(1, 1, 1);
+        m4.compose(p3, q4, s3);
+        im.setMatrixAt(i, m4);
+      }, true);
+    }
 
     // ================= עזרים לבניית מקומות בסיפור =================
     function put(obj, x, y, z, parent) {
@@ -867,344 +903,474 @@
     const SP = W.spots;
     const placeName = (he, en, x, z, r) => W.places.push({ he, en, x, z, r });
 
-    // ================= בית חב״ד =================
-    const chB = buildingNear(285, -175, (b) => b.area > 90 && b.area < 450 && b.levels <= 3 && !b.name && !b.gable);
-    const CH = frontOf(chB);
-    W.chabadFrame = CH;
-    const chG = grp(CH);
-    put(new T.Mesh(new T.PlaneGeometry(1.7, 2.5), lam(0xffd23f)), 0, 1.25, 0.04, chG);
-    put(new T.Mesh(new T.PlaneGeometry(1.3, 2.2), lam(0x6b3e1f)), 0, 1.1, 0.05, chG);
-    boxMesh(2.2, 0.15, 0.6, lam(0x9a9a9a), 0, 0.075, 0.32, chG);
-    sign('בית חב״ד', 2.8, 0.7, 0, 2.95, 0.06, { w: 96, h: 24, size: 16, bg: '#1b3a8a', fg: '#ffffff', border: '#ffd23f', lit: true }, chG);
-    W.places.chabadDoor = spot(CH, 0, 0.7);
-    SP.moshe = spot(CH, -1.3, 1.4);
-    SP.playerStart = spot(CH, 0.3, 2.3);
-    SP.crate = spot(CH, -2.9, 2.6);
-    SP.kitchen = spot(CH, 2.4, 0.9);
-    SP.zalmanAfter = spot(CH, -2.5, 1.0);
-    SP.vanStart = roadSpot(CH.road);
-    // כלי רכב נוספים ליד בית חב״ד: קטנוע ואופניים על המדרכה, מכונית על הכביש
-    {
-      const r = CH.road, w = r.seg.w;
-      let nx = -r.dz, nz = r.dx;
-      if (nx * (CH.x - r.x) + nz * (CH.z - r.z) < 0) {
-        nx = -nx;
-        nz = -nz;
-      }
-      const side = (along, off) => ({ x: r.x + r.dx * along + nx * off, z: r.z + r.dz * along + nz * off, h: Math.atan2(r.dx, r.dz) });
-      SP.rides = [
-        Object.assign({ type: 'scooter', id: 'scooter1' }, side(5, w / 2 + 1.3)),
-        Object.assign({ type: 'bike', id: 'bike1' }, side(6.3, w / 2 + 1.3)),
-        Object.assign({ type: 'car', id: 'car1' }, side(-8, Math.min(w / 4, 1.6))),
-      ];
-    }
-    placeName('בית חב״ד', 'Chabad House', CH.x, CH.z, 9);
-    const L2 = new T.Group(), L2roof = new T.Group(), L3 = new T.Group();
-    L2.visible = L2roof.visible = L3.visible = false;
-    chG.add(L2, L2roof, L3);
-    const chH = chB.h;
-    sign('בית חב״ד', 6, 1.5, 0, chH + 1.0, -0.5, { w: 128, h: 32, size: 22, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L2roof);
-    sign('מטבח שבת', 2.2, 0.55, 2.4, 2.1, 0.06, { w: 96, h: 24, size: 15, bg: '#ffd23f', fg: '#1b3a8a', border: '#1b3a8a', lit: true }, L2);
-    boxMesh(2.4, 0.08, 0.9, lam(0xffffff), 2.0, 0.82, 2.4, L2);
-    for (const [lx, lz] of [[1.0, 2.1], [3.0, 2.1], [1.0, 2.7], [3.0, 2.7]]) boxMesh(0.08, 0.8, 0.08, lam(0x6b3e1f), lx, 0.4, lz, L2);
-    boxMesh(0.6, 0.25, 0.3, lam(0xc98a3a), 1.5, 0.98, 2.4, L2);
-    boxMesh(0.14, 0.4, 0.14, lam(0x7b1e3a), 2.6, 1.06, 2.4, L2);
-    const fw = Math.min(CH.w / 2 - 0.4, 5);
-    makeLights([-fw, 3.6, 0.2], [fw, 3.6, 0.2], 12, L2);
-    for (const fx of [-fw + 0.5, fw - 0.5]) {
-      boxMesh(0.08, 2.2, 0.08, lam(0xdddddd), fx, chH + 1.1, -1.5, L2roof);
-      boxMesh(0.04, 0.7, 1.1, lam(0xffd23f), fx, chH + 1.85, -0.95, L2roof);
-    }
-    // דרגה 3: קומה נוספת על אותו קונטור
-    {
-      const buf = { p: [], n: [], u: [], c: [] }, rb = { p: [], n: [], u: [], c: [] };
-      wallsFor(buf, chB, chH, chH + 3.2, 0);
-      roofFor(rb, chB, chH + 3.2, new T.Color(0.8, 0.78, 0.75));
-      for (const [bf, mat] of [[buf, wallRes], [rb, roofMat]]) {
-        const g = new T.BufferGeometry();
-        g.setAttribute('position', new T.Float32BufferAttribute(bf.p, 3));
-        g.setAttribute('normal', new T.Float32BufferAttribute(bf.n, 3));
-        g.setAttribute('uv', new T.Float32BufferAttribute(bf.u, 2));
-        g.setAttribute('color', new T.Float32BufferAttribute(bf.c, 3));
-        const m = new T.Mesh(g, mat);
-        m.castShadow = m.receiveShadow = true;
-        m.position.set(-CH.x, 0, -CH.z);
-        const holder = new T.Group();
-        holder.rotation.y = -CH.ang;
-        holder.add(m);
-        L3.add(holder);
-      }
-      sign('מרכז קהילתי חב״ד', 7.5, 1.4, 0, chH + 4.3, -0.5, { w: 160, h: 30, size: 19, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L3);
-      makeLights([-fw, 6.8, 0.2], [fw, 6.8, 0.2], 12, L3);
-    }
-    let l2Applied = false;
-    W.setChabadLevel = function (l) {
-      L2.visible = l >= 2;
-      L2roof.visible = l === 2;
-      L3.visible = l >= 3;
-      if (l >= 2 && !l2Applied) {
-        l2Applied = true;
-        circLocal(CH, 2.0, 2.4, 1.2);
-      }
-    };
-    W.dormTable = null;
-
-    // ================= מכולת כהן =================
-    const grB = buildingNear(394, -437, (b) => b.area > 60 && b.area < 1500);
-    const GR = frontOf(grB);
-    const grG = grp(GR);
-    const awW = Math.min(GR.w - 0.6, 9);
-    const awnTex = G.canvasTex(16, 4, (g) => {
-      for (let x = 0; x < 16; x++) {
-        g.fillStyle = (x >> 1) % 2 ? '#ffffff' : '#2e9d5f';
-        g.fillRect(x, 0, 1, 4);
-      }
-    }, true);
-    awnTex.repeat.set(Math.round(awW / 2), 1);
-    const awn = boxMesh(awW, 0.12, 1.5, lam(0xffffff, { map: awnTex }), 0, 2.9, 0.75, grG);
-    awn.rotation.x = 0.25;
-    sign('מכולת כהן', 4.4, 0.85, 0, 3.75, 0.06, { w: 112, h: 24, size: 16, bg: '#2e7d4f', fg: '#ffffff', border: '#ffd23f', lit: true }, grG);
-    put(new T.Mesh(new T.PlaneGeometry(1.4, 2.2), lam(0x2b3a55)), 1.6, 1.1, 0.05, grG);
-    const fruit = [0xe74c3c, 0xf39c12, 0x27ae60, 0xf1c40f];
-    for (let k = 0; k < 3; k++) {
-      boxMesh(0.85, 0.5, 0.7, lam(0x9c6b3c), -1.4 - k * 0.95, 0.25, 0.6, grG);
-      boxMesh(0.75, 0.12, 0.6, lam(fruit[k]), -1.4 - k * 0.95, 0.55, 0.6, grG);
-      circLocal(GR, -1.4 - k * 0.95, 0.6, 0.45);
-    }
-    SP.cohen = spot(GR, 1.6, 1.3);
-    W.placeLights.cohen = makeLights([-awW / 2, 3.45, 0.15], [awW / 2, 3.45, 0.15], 11, grG);
-    placeName('מכולת כהן', 'Cohen Grocery', GR.x, GR.z, 9);
-
-    // ================= בית הכנסת =================
-    const shB = findB(/האשכנזי/) || findB(/בית כנסת|בית הכנסת/) || buildingNear(540, -396);
-    const SH = frontOf(shB);
-    const shG = grp(SH);
-    sign('בית הכנסת', 3, 0.7, 0, Math.min(shB.h - 0.6, 4.2), 0.06, { w: 96, h: 22, size: 14, bg: '#e9e4d8', fg: '#1b3a8a', border: '#1b3a8a' }, shG);
-    const shw = Math.min(SH.w / 2 - 0.4, 5);
-    W.shulLights = makeLights([-shw, 3.4, 0.2], [shw, 3.4, 0.2], 10, shG);
-    W.shulLights.visible = false;
-    SP.shulDoor = spot(SH, 0, 0.6);
-    SP.zoneShul = roadSpot(SH.road, 7);
-    placeName(shB.name || 'בית הכנסת', 'Synagogue', SH.x, SH.z, 12);
-
-    // ================= תחנת אוטובוס ברחוב הבנים =================
-    {
-      const r = nearestRoad(335, -90, 200, (o) => o.rd.name === 'הבנים') || nearestRoad(335, -90, 200);
-      let nx = -r.dz, nz = r.dx;
-      const off = r.seg.w / 2 + 2.0;
-      if (!isFree(r.x + nx * off, r.z + nz * off, 1.6)) {
-        nx = -nx;
-        nz = -nz;
-      }
-      const BF = { x: r.x + nx * off, z: r.z + nz * off, ang: Math.atan2(-nx, -nz), w: 4 };
-      const bG = grp(BF);
-      const shelterMat = lam(0x2f6f9f);
-      boxMesh(3.6, 0.15, 1.5, shelterMat, 0, 2.5, -0.1, bG);
-      boxMesh(3.4, 2.3, 0.06, new T.MeshLambertMaterial({ color: 0x9fd3ff, transparent: true, opacity: 0.55 }), 0, 1.25, -0.75, bG);
-      boxMesh(0.12, 2.5, 0.12, shelterMat, -1.7, 1.25, -0.7, bG);
-      boxMesh(0.12, 2.5, 0.12, shelterMat, 1.7, 1.25, -0.7, bG);
-      boxMesh(2.4, 0.12, 0.5, lam(0x8b5a2b), 0, 0.55, -0.45, bG);
-      boxMesh(0.1, 2.8, 0.1, lam(0x666666), 2.4, 1.4, 0.4, bG);
-      sign('תחנה', 1.0, 0.6, 2.4, 2.75, 0.46, { w: 48, h: 28, size: 14, bg: '#2f6f9f', fg: '#ffffff', border: '#ffffff' }, bG);
-      for (const lx of [-1.4, 0, 1.4]) circLocal(BF, lx, -0.7, 0.45);
-      SP.yossi = spot(BF, 1.3, 0.8);
-      W.placeLights.yossi = makeLights([-1.7, 2.7, 0.6], [1.7, 2.7, 0.6], 7, bG);
-      placeName('תחנת הבנים', 'HaBanim Bus Stop', BF.x, BF.z, 6);
-    }
-
-    // ================= בית הקפה =================
-    const cfB = buildingNear(395, -304, (b) => b.area > 50 && b.area < 2000);
-    const CF = frontOf(cfB);
-    const cfG = grp(CF);
-    sign('קפה בוקר טוב', 4.6, 0.85, 0, 3.0, 0.06, { w: 128, h: 24, size: 15, bg: '#6b3e1f', fg: '#ffe7b0', border: '#ffd23f', lit: true }, cfG);
-    for (const tx of [-2.4, 2.4]) {
-      put(new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.08, 8), lam(0xffffff)), tx, 0.78, 1.9, cfG);
-      boxMesh(0.08, 2.3, 0.08, lam(0x444444), tx, 1.15, 1.9, cfG);
-      const umb = new T.Mesh(new T.ConeGeometry(1.2, 0.5, 8), lam(tx < 0 ? 0xd62828 : 0x1b3a8a, { flatShading: true }));
-      umb.castShadow = true;
-      put(umb, tx, 2.35, 1.9, cfG);
-      circLocal(CF, tx, 1.9, 0.6);
-    }
-    SP.daniel = spot(CF, 0, 1.5);
-    const cw = Math.min(CF.w / 2 - 0.3, 4.5);
-    W.placeLights.daniel = makeLights([-cw, 3.35, 0.2], [cw, 3.35, 0.2], 10, cfG);
-    placeName('קפה בוקר טוב', 'Boker Tov Cafe', CF.x, CF.z, 8);
-
-    // ================= תחנת הדלק =================
-    {
-      const fp = poi(/סונול/) || pois.find((p) => p.k === 'amenity:fuel') || { x: 441, z: -136 };
-      const r = nearestRoad(fp.x, fp.z, 120);
-      const ang = Math.atan2(r.x - fp.x, r.z - fp.z);
-      // מזיזים את מרכז התחנה עד שיש מקום פנוי לגגון
-      let cx = fp.x, cz = fp.z;
-      for (let k = 0; k < 8 && !isFree(cx, cz, 3.2); k++) {
-        cx += Math.sin(ang) * 1.5;
-        cz += Math.cos(ang) * 1.5;
-      }
-      const GF = { x: cx, z: cz, ang };
-      const gG = grp(GF);
-      const roomy = isFree(cx, cz, 5);
-      if (roomy) {
-        boxMesh(9, 0.5, 6, lam(0xffffff), 0, 4.6, 0, gG);
-        boxMesh(9.1, 0.22, 6.1, lam(0x1f5fbf), 0, 4.4, 0, gG);
-        for (const [px, pz] of [[-4, -2.5], [4, -2.5], [-4, 2.5], [4, 2.5]]) {
-          boxMesh(0.35, 4.3, 0.35, lam(0xdddddd), px, 2.15, pz, gG);
-          circLocal(GF, px, pz, 0.3);
+    // ================= פתח תקווה (פרק 2) =================
+    function storyPT() {
+      // בית חב״ד האמיתי של פתח תקווה (נקודה במפה) — הבניין הקרוב אליו
+      const chP = poi(/בית חב"ד|בית חב״ד/) || { x: -665, z: -86 };
+      const chB = buildingNear(chP.x, chP.z, (b) => b.area > 60 && b.area < 2500);
+      const CH = frontOf(chB);
+      W.chabadFrame = CH;
+      const chG = grp(CH);
+      put(new T.Mesh(new T.PlaneGeometry(1.7, 2.5), lam(0xffd23f)), 0, 1.25, 0.04, chG);
+      put(new T.Mesh(new T.PlaneGeometry(1.3, 2.2), lam(0x6b3e1f)), 0, 1.1, 0.05, chG);
+      boxMesh(2.2, 0.15, 0.6, lam(0x9a9a9a), 0, 0.075, 0.32, chG);
+      sign('בית חב״ד פתח תקווה', 4.2, 0.75, 0, 2.95, 0.06, { w: 144, h: 26, size: 15, bg: '#1b3a8a', fg: '#ffffff', border: '#ffd23f', lit: true }, chG);
+      const fw = Math.min(CH.w / 2 - 0.4, 5);
+      makeLights([-fw, 3.6, 0.2], [fw, 3.6, 0.2], 12, chG);
+      W.places.chabadDoor = spot(CH, 0, 0.7);
+      SP.moshe = spot(CH, -1.3, 1.4);
+      SP.playerStart = spot(CH, 0.3, 2.3);
+      SP.crate = spot(CH, -2.9, 2.6);
+      SP.kitchen = spot(CH, 2.4, 0.9);
+      SP.vanStart = roadSpot(CH.road);
+      {
+        const r = CH.road, w = r.seg.w;
+        let nx = -r.dz, nz = r.dx;
+        if (nx * (CH.x - r.x) + nz * (CH.z - r.z) < 0) {
+          nx = -nx;
+          nz = -nz;
         }
-        sign('סונול', 2.6, 0.6, 0, 5.2, 3.06, { w: 80, h: 20, size: 14, bg: '#1f5fbf', fg: '#ffd23f', border: '#ffffff', lit: true }, gG);
-        W.placeLights.roi = makeLights([-4.3, 4.2, 3.05], [4.3, 4.2, 3.05], 12, gG, 0.15);
-      } else W.placeLights.roi = makeLights([-2.5, 2.8, 0.8], [2.5, 2.8, 0.8], 8, gG, 0.15);
-      for (const px of [-1.8, 1.8]) {
-        boxMesh(0.8, 1.6, 1.1, lam(0x1f5fbf), px, 0.8, 0, gG);
-        boxMesh(0.82, 0.4, 0.55, lam(0x222222), px, 1.25, 0, gG);
-        circLocal(GF, px, 0, 0.7);
+        const side = (along, off) => ({ x: r.x + r.dx * along + nx * off, z: r.z + r.dz * along + nz * off, h: Math.atan2(r.dx, r.dz) });
+        SP.rides = [
+          Object.assign({ type: 'scooter', id: 'scooter1' }, side(5, w / 2 + 1.3)),
+          Object.assign({ type: 'bike', id: 'bike1' }, side(6.3, w / 2 + 1.3)),
+          Object.assign({ type: 'car', id: 'car1' }, side(-8, Math.min(w / 4, 1.6))),
+        ];
       }
-      SP.roi = spot(GF, 0, 1.4);
-      SP.genHome = spot(GF, 2.6, 2.0);
-      SP.kiosk = spot(GF, -2.8, 1.8);
-      sign('נתיכים · שמן · מים', 2.4, 0.5, -2.8, 1.6, 1.25, { w: 96, h: 20, size: 11, bg: '#ffd23f', fg: '#1f5fbf', border: '#1f5fbf' }, gG);
-      boxMesh(2.4, 1.1, 0.5, lam(0xe8e2d6), -2.8, 0.55, 1.0, gG);
-      circLocal(GF, -2.8, 1.0, 0.7);
-      // רכב תקוע של שמעון (משימה 2)
-      let carSpot = null;
-      for (const [lx, lz] of [[6.5, 2.5], [-6.5, 2.5], [6.5, -2], [-6.5, -2], [0, 6]]) {
-        const [x, z] = F(GF, lx, lz);
-        if (isFree(x, z, 2.2)) {
-          carSpot = [lx, lz];
-          break;
+      placeName('בית חב״ד פתח תקווה', 'Chabad Petah Tikva', CH.x, CH.z, 10);
+      W.setChabadLevel = function () {};
+      W.dormTable = null;
+
+      // ---------- שוק פתח תקווה: דוכנים ----------
+      {
+        const mb = findB(/שוק פתח תקווה/) || buildingNear(-658, -652);
+        const MK = frontOf(mb);
+        const mG = grp(MK);
+        sign('שוק פתח תקווה', 5.2, 0.9, 0, 3.4, 0.06, { w: 144, h: 26, size: 16, bg: '#b5451b', fg: '#ffffff', border: '#ffd23f', lit: true }, mG);
+        const AW = [0xd62828, 0x2e9d5f, 0xf39c12, 0x1b6fd8];
+        const GOODS = [[0xe74c3c, 0xf1c40f], [0x27ae60, 0x8bc34a], [0xff9800, 0xffeb3b], [0x9c27b0, 0xe91e63]];
+        SP.stalls = [];
+        for (let k = 0; k < 4; k++) {
+          const lx = (k - 1.5) * 3.4, lz = 2.4;
+          boxMesh(2.6, 0.9, 1.0, lam(0x9c6b3c), lx, 0.45, lz, mG);
+          boxMesh(2.4, 0.18, 0.8, lam(GOODS[k][0]), lx - 0.6, 0.98, lz, mG);
+          boxMesh(1.0, 0.18, 0.8, lam(GOODS[k][1]), lx + 0.8, 0.98, lz, mG);
+          const aw = boxMesh(2.9, 0.08, 1.6, lam(AW[k]), lx, 2.5, lz - 0.1, mG);
+          aw.rotation.x = 0.18;
+          for (const sx of [-1.35, 1.35]) boxMesh(0.07, 2.5, 0.07, lam(0x666666), lx + sx, 1.25, lz + 0.55, mG);
+          circLocal(MK, lx, lz, 1.1);
+          SP.stalls.push(spot(MK, lx, lz + 1.4, Math.PI));
+        }
+        W.placeLights.market = makeLights([-6.5, 2.9, 3.2], [6.5, 2.9, 3.2], 16, mG);
+        SP.zoneMarket = roadSpot(MK.road, 8);
+        placeName('שוק פתח תקווה', 'Petah Tikva Market', MK.x, MK.z, 22);
+      }
+
+      // ---------- בית הכנסת הגדול ----------
+      {
+        const gb = findB(/^בית הכנסת הגדול$/) || buildingNear(-418, -439);
+        const GS = frontOf(gb);
+        const gG = grp(GS);
+        sign('בית הכנסת הגדול', 4, 0.75, 0, Math.min(gb.h - 0.6, 4.4), 0.06, { w: 128, h: 24, size: 15, bg: '#e9e4d8', fg: '#1b3a8a', border: '#1b3a8a' }, gG);
+        const gw = Math.min(GS.w / 2 - 0.4, 6);
+        W.greatLights = makeLights([-gw, 3.6, 0.2], [gw, 3.6, 0.2], 14, gG);
+        W.greatLights.visible = false;
+        SP.greatDoor = spot(GS, 0, 0.8);
+        SP.zoneGreat = roadSpot(GS.road, 8);
+        SP.greatFrame = GS;
+        placeName('בית הכנסת הגדול', 'Great Synagogue', GS.x, GS.z, 14);
+      }
+
+      // ---------- מרכז שניידר לרפואת ילדים ----------
+      {
+        const hb = findB(/שניידר/) || buildingNear(-2069, -188);
+        const HS = frontOf(hb);
+        const hG = grp(HS);
+        sign('מרכז שניידר', 4, 0.8, 0, 3.6, 0.06, { w: 128, h: 26, size: 16, bg: '#ffffff', fg: '#1b6fd8', border: '#1b6fd8', lit: true }, hG);
+        boxMesh(4.2, 0.12, 2.2, lam(0xdfe8f0), 0, 2.8, 1.1, hG);
+        for (const sx of [-2, 2]) boxMesh(0.12, 2.8, 0.12, lam(0xbfc8d0), sx, 1.4, 2.1, hG);
+        W.placeLights.hosp = makeLights([-2, 2.7, 2.1], [2, 2.7, 2.1], 9, hG);
+        W.placeLights.hosp.visible = false;
+        SP.hospDoor = spot(HS, 0, 1.4);
+        SP.zoneHosp = roadSpot(HS.road, 9);
+        placeName('מרכז שניידר לרפואת ילדים', 'Schneider Children\'s Medical Center', HS.x, HS.z, 30);
+      }
+
+      // ---------- כיכר המתנדבים (ליד בית הכנסת הגדול) ----------
+      {
+        const pa = areaBy(/כיכר המתנדבים/);
+        if (pa) {
+          const [cx, cz] = centroidOf(pa.p);
+          placeName('כיכר המתנדבים', 'HaMitnadvim Square', cx, cz, 25);
         }
       }
-      if (carSpot) {
-        const stuck = G.makeCar(0x7f8c8d);
-        stuck.position.set(carSpot[0], 0, carSpot[1]);
-        const hood = new T.Mesh(new T.BoxGeometry(1.7, 0.08, 1.2), lam(0x7f8c8d));
-        hood.position.set(0, 1.45, 1.5);
-        hood.rotation.x = -0.9;
-        stuck.add(hood);
-        gG.add(stuck);
-        circLocal(GF, carSpot[0], carSpot[1] + 1.1, 1.0);
-        circLocal(GF, carSpot[0], carSpot[1] - 1.1, 1.0);
-        SP.shimon = spot(GF, carSpot[0] - 1.6 * Math.sign(carSpot[0] || 1), carSpot[1] + 1.5);
-      } else SP.shimon = spot(GF, -1.5, 3.2);
-      placeName('תחנת הדלק סונול', 'Sonol Gas Station', cx, cz, 12);
-    }
-
-    // ================= פארק השחר =================
-    {
-      const pa = areaBy(/פארק השחר/) || areaPolys.find((a) => a.k === 'park');
-      const [pcx, pcz] = centroidOf(pa.p);
-      const path = [];
-      for (let i = 0; i < pa.p.length; i += 2) {
-        const dx = pa.p[i] - pcx, dz = pa.p[i + 1] - pcz, L = Math.hypot(dx, dz) || 1;
-        const k = Math.max(0.3, 1 - 4 / L);
-        path.push([pcx + dx * k, pcz + dz * k]);
-      }
-      W.jogPath = path;
-      SP.ido = { x: path[0][0], z: path[0][1], rot: 0 };
-      // ספסל ואברהם במרכז הפארק
-      let bx = pcx, bz = pcz;
-      if (!pip(bx, bz, pa.p)) [bx, bz] = path[(path.length / 2) | 0];
-      const PF = { x: bx, z: bz, ang: 0 };
-      const pG = grp(PF);
-      boxMesh(1.7, 0.12, 0.55, lam(0x8b5a2b), 0, 0.5, 0, pG);
-      boxMesh(1.7, 0.5, 0.1, lam(0x8b5a2b), 0, 0.8, -0.25, pG);
-      W.addCircle(bx, bz, 0.8);
-      SP.avraham = { x: bx + 1.5, z: bz + 0.6, rot: 0 };
-      const lights = new T.Group();
-      boxMesh(0.12, 3, 0.12, lam(0x444444), -4, 1.5, 2.2, lights);
-      boxMesh(0.12, 3, 0.12, lam(0x444444), 4, 1.5, 2.2, lights);
-      makeLights([-4, 2.9, 2.2], [4, 2.9, 2.2], 14, lights, 0.4);
-      pG.add(lights);
-      W.placeLights.ido = lights;
-      const flowerCols = [0xff5e7e, 0xffd23f, 0xffffff, 0xb07cff];
-      for (let k = 0; k < 12; k++) {
-        const a = (k / 12) * Math.PI * 2;
-        boxMesh(0.35, 0.3, 0.35, lam(flowerCols[k % 4]), Math.cos(a) * 3.2, 0.15, Math.sin(a) * 3.2, pG);
-      }
-      placeName(pa.n || 'פארק השחר', 'HaShachar Park', pcx, pcz, 45);
-    }
-
-    // ================= רחבת השחר: מקום החנוכייה =================
-    {
-      const pl = areaBy(/רחבת השחר/) || areaPolys.find((a) => a.k === 'recreation_ground');
-      let [cx, cz] = pl ? centroidOf(pl.p) : [356, 46];
-      for (let k = 0; k < 10 && !isFree(cx, cz, 3); k++) cx += 2;
-      const r = nearestRoad(cx, cz, 150);
-      const PL = { x: cx, z: cz, ang: Math.atan2(r.x - cx, r.z - cz) };
-      SP.menorah = { x: cx, z: cz, rot: PL.ang };
-      SP.juncs = [spot(PL, -2.6, 1.0), spot(PL, 2.6, 1.0), spot(PL, 0.5, -2.4)];
-      SP.genPlaced = spot(PL, -2.4, -2.0);
-      SP.zonePlaza = roadSpot(r, 8);
-      SP.crowd = [];
-      for (let ring = 0; ring < 2; ring++)
-        for (let k = 0; k < 7; k++) {
-          const a = -1.2 + (k / 6) * 2.4, rad = 4.6 + ring * 1.6;
-          const [x, z] = F(PL, Math.sin(a) * rad, Math.cos(a) * rad);
-          if (isFree(x, z, 0.5)) SP.crowd.push({ x, z });
-        }
-      if (SP.crowd.length < 6) for (let k = 0; k < 8; k++) SP.crowd.push(spot(PL, -3.5 + k, 5));
-      SP.helperRoi = { from: spot(PL, 7, 6), to: spot(PL, 2.2, 2.6) };
-      SP.helperDaniel = { from: spot(PL, -7, 6), to: spot(PL, -2.2, 2.6) };
-      placeName((pl && pl.n) || 'רחבת השחר', 'HaShachar Plaza', cx, cz, 18);
-    }
-
-    // ================= ״הבאר — מקום לצעירים״: הסטודנטים =================
-    {
-      const yb = findB(/הבאר/) || buildingNear(586, -321);
-      const YF = frontOf(yb);
-      const yG = grp(YF);
-      const table = new T.Group();
-      table.visible = false;
-      yG.add(table);
-      boxMesh(3.2, 0.08, 1.0, lam(0xffffff), 0, 0.82, 2.0, table);
-      for (const [lx, lz] of [[-1.4, 1.6], [1.4, 1.6], [-1.4, 2.4], [1.4, 2.4]]) boxMesh(0.08, 0.8, 0.08, lam(0x6b3e1f), lx, 0.4, lz, table);
-      boxMesh(0.6, 0.25, 0.3, lam(0xc98a3a), -0.8, 0.98, 2.0, table);
-      boxMesh(0.14, 0.4, 0.14, lam(0x7b1e3a), 0.1, 1.06, 2.0, table);
-      boxMesh(0.5, 0.3, 0.5, lam(0x555555), 0.9, 1.0, 2.0, table);
-      const candleMat = new T.MeshBasicMaterial({ color: 0xffd27a });
-      for (const cx of [-1.3, -1.0]) {
-        boxMesh(0.08, 0.35, 0.08, lam(0xffffff), cx, 1.04, 1.75, table);
-        boxMesh(0.07, 0.1, 0.07, candleMat, cx, 1.27, 1.75, table);
-      }
-      const yw = Math.min(YF.w / 2 - 0.3, 4.5);
-      makeLights([-yw, 3.2, 0.2], [yw, 3.2, 0.2], 11, table);
-      W.dormTable = table;
-      sign('הבאר · מקום לצעירים', 4.8, 0.7, 0, 3.0, 0.06, { w: 144, h: 22, size: 13, bg: '#5b3f8c', fg: '#ffffff', border: '#ffd23f', lit: true }, yG);
-      SP.alon = spot(YF, -1.8, 3.0);
-      SP.maya = spot(YF, 1.8, 3.0);
-      SP.zoneDorm = roadSpot(YF.road, 7);
-      placeName('הבאר — מקום לצעירים', 'HaBe\'er Youth Center', YF.x, YF.z, 10);
-    }
-
-    // ================= הבית של ר׳ זלמן =================
-    {
-      const zb = buildingNear(-420, 300, (b) => b.area > 80 && b.area < 600 && !b.name);
-      const ZF = frontOf(zb);
-      const zG = grp(ZF);
-      boxMesh(0.5, 0.08, 0.5, lam(0x8b5a2b), 0.9, 0.45, 1.1, zG);
-      boxMesh(0.5, 0.5, 0.08, lam(0x8b5a2b), 0.9, 0.7, 0.88, zG);
-      for (const [lx, lz] of [[0.7, 0.9], [1.1, 0.9], [0.7, 1.3], [1.1, 1.3]]) boxMesh(0.05, 0.45, 0.05, lam(0x5a3a1a), lx, 0.22, lz, zG);
-      boxMesh(0.4, 0.5, 0.4, lam(0x9c6b3c), -1.0, 0.25, 0.6, zG);
-      SP.zalman = spot(ZF, 0.2, 1.4);
-    }
-
-    // קטנועים ואופניים פזורים ליד מקומות מרכזיים
-    for (const [k, p] of [['scooter', SP.zonePlaza], ['bike', SP.zonePlaza], ['bike', SP.zoneDorm], ['scooter', SP.zoneShul], ['bike', SP.avraham], ['scooter', SP.cohen]]) {
-      if (!p) continue;
-      const r = nearestRoad(p.x, p.z, 80);
-      if (!r) continue;
-      let nx = -r.dz, nz = r.dx;
-      for (const s of [1, -1]) {
-        const x = r.x + nx * s * (r.seg.w / 2 + 1.3) + r.dx * 4, z = r.z + nz * s * (r.seg.w / 2 + 1.3) + r.dz * 4;
-        if (isFree(x, z, 0.8)) {
-          SP.rides.push({ type: k, id: k + SP.rides.length, x, z, h: Math.atan2(r.dx, r.dz) });
-          break;
+      // קטנועים ואופניים ליד המקומות
+      for (const [k, p] of [['scooter', SP.zoneMarket], ['bike', SP.zoneGreat], ['scooter', SP.zoneHosp], ['bike', SP.zoneMarket]]) {
+        if (!p) continue;
+        const r = nearestRoad(p.x, p.z, 80);
+        if (!r) continue;
+        const nx = -r.dz, nz = r.dx;
+        for (const s of [1, -1]) {
+          const x = r.x + nx * s * (r.seg.w / 2 + 1.3) + r.dx * 4, z = r.z + nz * s * (r.seg.w / 2 + 1.3) + r.dz * 4;
+          if (isFree(x, z, 0.8)) {
+            SP.rides.push({ type: k, id: k + SP.rides.length, x, z, h: Math.atan2(r.dx, r.dz) });
+            break;
+          }
         }
       }
+      return chB;
     }
+
+    // מקומות הסיפור: לכל עיר משלה (הוד השרון — פרק 1, פתח תקווה — פרק 2)
+    function storyHod() {
+      // ================= בית חב״ד =================
+      const chB = buildingNear(285, -175, (b) => b.area > 90 && b.area < 450 && b.levels <= 3 && !b.name && !b.gable);
+      const CH = frontOf(chB);
+      W.chabadFrame = CH;
+      const chG = grp(CH);
+      put(new T.Mesh(new T.PlaneGeometry(1.7, 2.5), lam(0xffd23f)), 0, 1.25, 0.04, chG);
+      put(new T.Mesh(new T.PlaneGeometry(1.3, 2.2), lam(0x6b3e1f)), 0, 1.1, 0.05, chG);
+      boxMesh(2.2, 0.15, 0.6, lam(0x9a9a9a), 0, 0.075, 0.32, chG);
+      sign('בית חב״ד', 2.8, 0.7, 0, 2.95, 0.06, { w: 96, h: 24, size: 16, bg: '#1b3a8a', fg: '#ffffff', border: '#ffd23f', lit: true }, chG);
+      W.places.chabadDoor = spot(CH, 0, 0.7);
+      SP.moshe = spot(CH, -1.3, 1.4);
+      SP.playerStart = spot(CH, 0.3, 2.3);
+      SP.crate = spot(CH, -2.9, 2.6);
+      SP.kitchen = spot(CH, 2.4, 0.9);
+      SP.zalmanAfter = spot(CH, -2.5, 1.0);
+      SP.vanStart = roadSpot(CH.road);
+      // כלי רכב נוספים ליד בית חב״ד: קטנוע ואופניים על המדרכה, מכונית על הכביש
+      {
+        const r = CH.road, w = r.seg.w;
+        let nx = -r.dz, nz = r.dx;
+        if (nx * (CH.x - r.x) + nz * (CH.z - r.z) < 0) {
+          nx = -nx;
+          nz = -nz;
+        }
+        const side = (along, off) => ({ x: r.x + r.dx * along + nx * off, z: r.z + r.dz * along + nz * off, h: Math.atan2(r.dx, r.dz) });
+        SP.rides = [
+          Object.assign({ type: 'scooter', id: 'scooter1' }, side(5, w / 2 + 1.3)),
+          Object.assign({ type: 'bike', id: 'bike1' }, side(6.3, w / 2 + 1.3)),
+          Object.assign({ type: 'car', id: 'car1' }, side(-8, Math.min(w / 4, 1.6))),
+        ];
+      }
+      placeName('בית חב״ד', 'Chabad House', CH.x, CH.z, 9);
+      const L2 = new T.Group(), L2roof = new T.Group(), L3 = new T.Group();
+      L2.visible = L2roof.visible = L3.visible = false;
+      chG.add(L2, L2roof, L3);
+      const chH = chB.h;
+      sign('בית חב״ד', 6, 1.5, 0, chH + 1.0, -0.5, { w: 128, h: 32, size: 22, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L2roof);
+      sign('מטבח שבת', 2.2, 0.55, 2.4, 2.1, 0.06, { w: 96, h: 24, size: 15, bg: '#ffd23f', fg: '#1b3a8a', border: '#1b3a8a', lit: true }, L2);
+      boxMesh(2.4, 0.08, 0.9, lam(0xffffff), 2.0, 0.82, 2.4, L2);
+      for (const [lx, lz] of [[1.0, 2.1], [3.0, 2.1], [1.0, 2.7], [3.0, 2.7]]) boxMesh(0.08, 0.8, 0.08, lam(0x6b3e1f), lx, 0.4, lz, L2);
+      boxMesh(0.6, 0.25, 0.3, lam(0xc98a3a), 1.5, 0.98, 2.4, L2);
+      boxMesh(0.14, 0.4, 0.14, lam(0x7b1e3a), 2.6, 1.06, 2.4, L2);
+      const fw = Math.min(CH.w / 2 - 0.4, 5);
+      makeLights([-fw, 3.6, 0.2], [fw, 3.6, 0.2], 12, L2);
+      for (const fx of [-fw + 0.5, fw - 0.5]) {
+        boxMesh(0.08, 2.2, 0.08, lam(0xdddddd), fx, chH + 1.1, -1.5, L2roof);
+        boxMesh(0.04, 0.7, 1.1, lam(0xffd23f), fx, chH + 1.85, -0.95, L2roof);
+      }
+      // דרגה 3: קומה נוספת על אותו קונטור
+      {
+        const buf = { p: [], n: [], u: [], c: [] }, rb = { p: [], n: [], u: [], c: [] };
+        wallsFor(buf, chB, chH, chH + 3.2, 0);
+        roofFor(rb, chB, chH + 3.2, new T.Color(0.8, 0.78, 0.75));
+        for (const [bf, mat] of [[buf, wallRes], [rb, roofMat]]) {
+          const g = new T.BufferGeometry();
+          g.setAttribute('position', new T.Float32BufferAttribute(bf.p, 3));
+          g.setAttribute('normal', new T.Float32BufferAttribute(bf.n, 3));
+          g.setAttribute('uv', new T.Float32BufferAttribute(bf.u, 2));
+          g.setAttribute('color', new T.Float32BufferAttribute(bf.c, 3));
+          const m = new T.Mesh(g, mat);
+          m.castShadow = m.receiveShadow = true;
+          m.position.set(-CH.x, 0, -CH.z);
+          const holder = new T.Group();
+          holder.rotation.y = -CH.ang;
+          holder.add(m);
+          L3.add(holder);
+        }
+        sign('מרכז קהילתי חב״ד', 7.5, 1.4, 0, chH + 4.3, -0.5, { w: 160, h: 30, size: 19, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L3);
+        makeLights([-fw, 6.8, 0.2], [fw, 6.8, 0.2], 12, L3);
+      }
+      let l2Applied = false;
+      W.setChabadLevel = function (l) {
+        L2.visible = l >= 2;
+        L2roof.visible = l === 2;
+        L3.visible = l >= 3;
+        if (l >= 2 && !l2Applied) {
+          l2Applied = true;
+          circLocal(CH, 2.0, 2.4, 1.2);
+        }
+      };
+      W.dormTable = null;
+
+      // ================= מכולת כהן =================
+      const grB = buildingNear(394, -437, (b) => b.area > 60 && b.area < 1500);
+      const GR = frontOf(grB);
+      const grG = grp(GR);
+      const awW = Math.min(GR.w - 0.6, 9);
+      const awnTex = G.canvasTex(16, 4, (g) => {
+        for (let x = 0; x < 16; x++) {
+          g.fillStyle = (x >> 1) % 2 ? '#ffffff' : '#2e9d5f';
+          g.fillRect(x, 0, 1, 4);
+        }
+      }, true);
+      awnTex.repeat.set(Math.round(awW / 2), 1);
+      const awn = boxMesh(awW, 0.12, 1.5, lam(0xffffff, { map: awnTex }), 0, 2.9, 0.75, grG);
+      awn.rotation.x = 0.25;
+      sign('מכולת כהן', 4.4, 0.85, 0, 3.75, 0.06, { w: 112, h: 24, size: 16, bg: '#2e7d4f', fg: '#ffffff', border: '#ffd23f', lit: true }, grG);
+      put(new T.Mesh(new T.PlaneGeometry(1.4, 2.2), lam(0x2b3a55)), 1.6, 1.1, 0.05, grG);
+      const fruit = [0xe74c3c, 0xf39c12, 0x27ae60, 0xf1c40f];
+      for (let k = 0; k < 3; k++) {
+        boxMesh(0.85, 0.5, 0.7, lam(0x9c6b3c), -1.4 - k * 0.95, 0.25, 0.6, grG);
+        boxMesh(0.75, 0.12, 0.6, lam(fruit[k]), -1.4 - k * 0.95, 0.55, 0.6, grG);
+        circLocal(GR, -1.4 - k * 0.95, 0.6, 0.45);
+      }
+      SP.cohen = spot(GR, 1.6, 1.3);
+      W.placeLights.cohen = makeLights([-awW / 2, 3.45, 0.15], [awW / 2, 3.45, 0.15], 11, grG);
+      placeName('מכולת כהן', 'Cohen Grocery', GR.x, GR.z, 9);
+
+      // ================= בית הכנסת =================
+      const shB = findB(/האשכנזי/) || findB(/בית כנסת|בית הכנסת/) || buildingNear(540, -396);
+      const SH = frontOf(shB);
+      const shG = grp(SH);
+      sign('בית הכנסת', 3, 0.7, 0, Math.min(shB.h - 0.6, 4.2), 0.06, { w: 96, h: 22, size: 14, bg: '#e9e4d8', fg: '#1b3a8a', border: '#1b3a8a' }, shG);
+      const shw = Math.min(SH.w / 2 - 0.4, 5);
+      W.shulLights = makeLights([-shw, 3.4, 0.2], [shw, 3.4, 0.2], 10, shG);
+      W.shulLights.visible = false;
+      SP.shulDoor = spot(SH, 0, 0.6);
+      SP.zoneShul = roadSpot(SH.road, 7);
+      placeName(shB.name || 'בית הכנסת', 'Synagogue', SH.x, SH.z, 12);
+
+      // ================= תחנת אוטובוס ברחוב הבנים =================
+      {
+        const r = nearestRoad(335, -90, 200, (o) => o.rd.name === 'הבנים') || nearestRoad(335, -90, 200);
+        let nx = -r.dz, nz = r.dx;
+        const off = r.seg.w / 2 + 2.0;
+        if (!isFree(r.x + nx * off, r.z + nz * off, 1.6)) {
+          nx = -nx;
+          nz = -nz;
+        }
+        const BF = { x: r.x + nx * off, z: r.z + nz * off, ang: Math.atan2(-nx, -nz), w: 4 };
+        const bG = grp(BF);
+        const shelterMat = lam(0x2f6f9f);
+        boxMesh(3.6, 0.15, 1.5, shelterMat, 0, 2.5, -0.1, bG);
+        boxMesh(3.4, 2.3, 0.06, new T.MeshLambertMaterial({ color: 0x9fd3ff, transparent: true, opacity: 0.55 }), 0, 1.25, -0.75, bG);
+        boxMesh(0.12, 2.5, 0.12, shelterMat, -1.7, 1.25, -0.7, bG);
+        boxMesh(0.12, 2.5, 0.12, shelterMat, 1.7, 1.25, -0.7, bG);
+        boxMesh(2.4, 0.12, 0.5, lam(0x8b5a2b), 0, 0.55, -0.45, bG);
+        boxMesh(0.1, 2.8, 0.1, lam(0x666666), 2.4, 1.4, 0.4, bG);
+        sign('תחנה', 1.0, 0.6, 2.4, 2.75, 0.46, { w: 48, h: 28, size: 14, bg: '#2f6f9f', fg: '#ffffff', border: '#ffffff' }, bG);
+        for (const lx of [-1.4, 0, 1.4]) circLocal(BF, lx, -0.7, 0.45);
+        SP.yossi = spot(BF, 1.3, 0.8);
+        W.placeLights.yossi = makeLights([-1.7, 2.7, 0.6], [1.7, 2.7, 0.6], 7, bG);
+        placeName('תחנת הבנים', 'HaBanim Bus Stop', BF.x, BF.z, 6);
+      }
+
+      // ================= בית הקפה =================
+      const cfB = buildingNear(395, -304, (b) => b.area > 50 && b.area < 2000);
+      const CF = frontOf(cfB);
+      const cfG = grp(CF);
+      sign('קפה בוקר טוב', 4.6, 0.85, 0, 3.0, 0.06, { w: 128, h: 24, size: 15, bg: '#6b3e1f', fg: '#ffe7b0', border: '#ffd23f', lit: true }, cfG);
+      for (const tx of [-2.4, 2.4]) {
+        put(new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.08, 8), lam(0xffffff)), tx, 0.78, 1.9, cfG);
+        boxMesh(0.08, 2.3, 0.08, lam(0x444444), tx, 1.15, 1.9, cfG);
+        const umb = new T.Mesh(new T.ConeGeometry(1.2, 0.5, 8), lam(tx < 0 ? 0xd62828 : 0x1b3a8a, { flatShading: true }));
+        umb.castShadow = true;
+        put(umb, tx, 2.35, 1.9, cfG);
+        circLocal(CF, tx, 1.9, 0.6);
+      }
+      SP.daniel = spot(CF, 0, 1.5);
+      const cw = Math.min(CF.w / 2 - 0.3, 4.5);
+      W.placeLights.daniel = makeLights([-cw, 3.35, 0.2], [cw, 3.35, 0.2], 10, cfG);
+      placeName('קפה בוקר טוב', 'Boker Tov Cafe', CF.x, CF.z, 8);
+
+      // ================= תחנת הדלק =================
+      {
+        const fp = poi(/סונול/) || pois.find((p) => p.k === 'amenity:fuel') || { x: 441, z: -136 };
+        const r = nearestRoad(fp.x, fp.z, 120);
+        const ang = Math.atan2(r.x - fp.x, r.z - fp.z);
+        // מזיזים את מרכז התחנה עד שיש מקום פנוי לגגון
+        let cx = fp.x, cz = fp.z;
+        for (let k = 0; k < 8 && !isFree(cx, cz, 3.2); k++) {
+          cx += Math.sin(ang) * 1.5;
+          cz += Math.cos(ang) * 1.5;
+        }
+        const GF = { x: cx, z: cz, ang };
+        const gG = grp(GF);
+        const roomy = isFree(cx, cz, 5);
+        if (roomy) {
+          boxMesh(9, 0.5, 6, lam(0xffffff), 0, 4.6, 0, gG);
+          boxMesh(9.1, 0.22, 6.1, lam(0x1f5fbf), 0, 4.4, 0, gG);
+          for (const [px, pz] of [[-4, -2.5], [4, -2.5], [-4, 2.5], [4, 2.5]]) {
+            boxMesh(0.35, 4.3, 0.35, lam(0xdddddd), px, 2.15, pz, gG);
+            circLocal(GF, px, pz, 0.3);
+          }
+          sign('סונול', 2.6, 0.6, 0, 5.2, 3.06, { w: 80, h: 20, size: 14, bg: '#1f5fbf', fg: '#ffd23f', border: '#ffffff', lit: true }, gG);
+          W.placeLights.roi = makeLights([-4.3, 4.2, 3.05], [4.3, 4.2, 3.05], 12, gG, 0.15);
+        } else W.placeLights.roi = makeLights([-2.5, 2.8, 0.8], [2.5, 2.8, 0.8], 8, gG, 0.15);
+        for (const px of [-1.8, 1.8]) {
+          boxMesh(0.8, 1.6, 1.1, lam(0x1f5fbf), px, 0.8, 0, gG);
+          boxMesh(0.82, 0.4, 0.55, lam(0x222222), px, 1.25, 0, gG);
+          circLocal(GF, px, 0, 0.7);
+        }
+        SP.roi = spot(GF, 0, 1.4);
+        SP.genHome = spot(GF, 2.6, 2.0);
+        SP.kiosk = spot(GF, -2.8, 1.8);
+        sign('נתיכים · שמן · מים', 2.4, 0.5, -2.8, 1.6, 1.25, { w: 96, h: 20, size: 11, bg: '#ffd23f', fg: '#1f5fbf', border: '#1f5fbf' }, gG);
+        boxMesh(2.4, 1.1, 0.5, lam(0xe8e2d6), -2.8, 0.55, 1.0, gG);
+        circLocal(GF, -2.8, 1.0, 0.7);
+        // רכב תקוע של שמעון (משימה 2)
+        let carSpot = null;
+        for (const [lx, lz] of [[6.5, 2.5], [-6.5, 2.5], [6.5, -2], [-6.5, -2], [0, 6]]) {
+          const [x, z] = F(GF, lx, lz);
+          if (isFree(x, z, 2.2)) {
+            carSpot = [lx, lz];
+            break;
+          }
+        }
+        if (carSpot) {
+          const stuck = G.makeCar(0x7f8c8d);
+          stuck.position.set(carSpot[0], 0, carSpot[1]);
+          const hood = new T.Mesh(new T.BoxGeometry(1.7, 0.08, 1.2), lam(0x7f8c8d));
+          hood.position.set(0, 1.45, 1.5);
+          hood.rotation.x = -0.9;
+          stuck.add(hood);
+          gG.add(stuck);
+          circLocal(GF, carSpot[0], carSpot[1] + 1.1, 1.0);
+          circLocal(GF, carSpot[0], carSpot[1] - 1.1, 1.0);
+          SP.shimon = spot(GF, carSpot[0] - 1.6 * Math.sign(carSpot[0] || 1), carSpot[1] + 1.5);
+        } else SP.shimon = spot(GF, -1.5, 3.2);
+        placeName('תחנת הדלק סונול', 'Sonol Gas Station', cx, cz, 12);
+      }
+
+      // ================= פארק השחר =================
+      {
+        const pa = areaBy(/פארק השחר/) || areaPolys.find((a) => a.k === 'park');
+        const [pcx, pcz] = centroidOf(pa.p);
+        const path = [];
+        for (let i = 0; i < pa.p.length; i += 2) {
+          const dx = pa.p[i] - pcx, dz = pa.p[i + 1] - pcz, L = Math.hypot(dx, dz) || 1;
+          const k = Math.max(0.3, 1 - 4 / L);
+          path.push([pcx + dx * k, pcz + dz * k]);
+        }
+        W.jogPath = path;
+        SP.ido = { x: path[0][0], z: path[0][1], rot: 0 };
+        // ספסל ואברהם במרכז הפארק
+        let bx = pcx, bz = pcz;
+        if (!pip(bx, bz, pa.p)) [bx, bz] = path[(path.length / 2) | 0];
+        const PF = { x: bx, z: bz, ang: 0 };
+        const pG = grp(PF);
+        boxMesh(1.7, 0.12, 0.55, lam(0x8b5a2b), 0, 0.5, 0, pG);
+        boxMesh(1.7, 0.5, 0.1, lam(0x8b5a2b), 0, 0.8, -0.25, pG);
+        W.addCircle(bx, bz, 0.8);
+        SP.avraham = { x: bx + 1.5, z: bz + 0.6, rot: 0 };
+        const lights = new T.Group();
+        boxMesh(0.12, 3, 0.12, lam(0x444444), -4, 1.5, 2.2, lights);
+        boxMesh(0.12, 3, 0.12, lam(0x444444), 4, 1.5, 2.2, lights);
+        makeLights([-4, 2.9, 2.2], [4, 2.9, 2.2], 14, lights, 0.4);
+        pG.add(lights);
+        W.placeLights.ido = lights;
+        const flowerCols = [0xff5e7e, 0xffd23f, 0xffffff, 0xb07cff];
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          boxMesh(0.35, 0.3, 0.35, lam(flowerCols[k % 4]), Math.cos(a) * 3.2, 0.15, Math.sin(a) * 3.2, pG);
+        }
+        placeName(pa.n || 'פארק השחר', 'HaShachar Park', pcx, pcz, 45);
+      }
+
+      // ================= רחבת השחר: מקום החנוכייה =================
+      {
+        const pl = areaBy(/רחבת השחר/) || areaPolys.find((a) => a.k === 'recreation_ground');
+        let [cx, cz] = pl ? centroidOf(pl.p) : [356, 46];
+        for (let k = 0; k < 10 && !isFree(cx, cz, 3); k++) cx += 2;
+        const r = nearestRoad(cx, cz, 150);
+        const PL = { x: cx, z: cz, ang: Math.atan2(r.x - cx, r.z - cz) };
+        SP.menorah = { x: cx, z: cz, rot: PL.ang };
+        SP.juncs = [spot(PL, -2.6, 1.0), spot(PL, 2.6, 1.0), spot(PL, 0.5, -2.4)];
+        SP.genPlaced = spot(PL, -2.4, -2.0);
+        SP.zonePlaza = roadSpot(r, 8);
+        SP.crowd = [];
+        for (let ring = 0; ring < 2; ring++)
+          for (let k = 0; k < 7; k++) {
+            const a = -1.2 + (k / 6) * 2.4, rad = 4.6 + ring * 1.6;
+            const [x, z] = F(PL, Math.sin(a) * rad, Math.cos(a) * rad);
+            if (isFree(x, z, 0.5)) SP.crowd.push({ x, z });
+          }
+        if (SP.crowd.length < 6) for (let k = 0; k < 8; k++) SP.crowd.push(spot(PL, -3.5 + k, 5));
+        SP.helperRoi = { from: spot(PL, 7, 6), to: spot(PL, 2.2, 2.6) };
+        SP.helperDaniel = { from: spot(PL, -7, 6), to: spot(PL, -2.2, 2.6) };
+        placeName((pl && pl.n) || 'רחבת השחר', 'HaShachar Plaza', cx, cz, 18);
+      }
+
+      // ================= ״הבאר — מקום לצעירים״: הסטודנטים =================
+      {
+        const yb = findB(/הבאר/) || buildingNear(586, -321);
+        const YF = frontOf(yb);
+        const yG = grp(YF);
+        const table = new T.Group();
+        table.visible = false;
+        yG.add(table);
+        boxMesh(3.2, 0.08, 1.0, lam(0xffffff), 0, 0.82, 2.0, table);
+        for (const [lx, lz] of [[-1.4, 1.6], [1.4, 1.6], [-1.4, 2.4], [1.4, 2.4]]) boxMesh(0.08, 0.8, 0.08, lam(0x6b3e1f), lx, 0.4, lz, table);
+        boxMesh(0.6, 0.25, 0.3, lam(0xc98a3a), -0.8, 0.98, 2.0, table);
+        boxMesh(0.14, 0.4, 0.14, lam(0x7b1e3a), 0.1, 1.06, 2.0, table);
+        boxMesh(0.5, 0.3, 0.5, lam(0x555555), 0.9, 1.0, 2.0, table);
+        const candleMat = new T.MeshBasicMaterial({ color: 0xffd27a });
+        for (const cx of [-1.3, -1.0]) {
+          boxMesh(0.08, 0.35, 0.08, lam(0xffffff), cx, 1.04, 1.75, table);
+          boxMesh(0.07, 0.1, 0.07, candleMat, cx, 1.27, 1.75, table);
+        }
+        const yw = Math.min(YF.w / 2 - 0.3, 4.5);
+        makeLights([-yw, 3.2, 0.2], [yw, 3.2, 0.2], 11, table);
+        W.dormTable = table;
+        sign('הבאר · מקום לצעירים', 4.8, 0.7, 0, 3.0, 0.06, { w: 144, h: 22, size: 13, bg: '#5b3f8c', fg: '#ffffff', border: '#ffd23f', lit: true }, yG);
+        SP.alon = spot(YF, -1.8, 3.0);
+        SP.maya = spot(YF, 1.8, 3.0);
+        SP.zoneDorm = roadSpot(YF.road, 7);
+        placeName('הבאר — מקום לצעירים', 'HaBe\'er Youth Center', YF.x, YF.z, 10);
+      }
+
+      // ================= הבית של ר׳ זלמן =================
+      {
+        const zb = buildingNear(-420, 300, (b) => b.area > 80 && b.area < 600 && !b.name);
+        const ZF = frontOf(zb);
+        const zG = grp(ZF);
+        boxMesh(0.5, 0.08, 0.5, lam(0x8b5a2b), 0.9, 0.45, 1.1, zG);
+        boxMesh(0.5, 0.5, 0.08, lam(0x8b5a2b), 0.9, 0.7, 0.88, zG);
+        for (const [lx, lz] of [[0.7, 0.9], [1.1, 0.9], [0.7, 1.3], [1.1, 1.3]]) boxMesh(0.05, 0.45, 0.05, lam(0x5a3a1a), lx, 0.22, lz, zG);
+        boxMesh(0.4, 0.5, 0.4, lam(0x9c6b3c), -1.0, 0.25, 0.6, zG);
+        SP.zalman = spot(ZF, 0.2, 1.4);
+      }
+
+      // קטנועים ואופניים פזורים ליד מקומות מרכזיים
+      for (const [k, p] of [['scooter', SP.zonePlaza], ['bike', SP.zonePlaza], ['bike', SP.zoneDorm], ['scooter', SP.zoneShul], ['bike', SP.avraham], ['scooter', SP.cohen]]) {
+        if (!p) continue;
+        const r = nearestRoad(p.x, p.z, 80);
+        if (!r) continue;
+        let nx = -r.dz, nz = r.dx;
+        for (const s of [1, -1]) {
+          const x = r.x + nx * s * (r.seg.w / 2 + 1.3) + r.dx * 4, z = r.z + nz * s * (r.seg.w / 2 + 1.3) + r.dz * 4;
+          if (isFree(x, z, 0.8)) {
+            SP.rides.push({ type: k, id: k + SP.rides.length, x, z, h: Math.atan2(r.dx, r.dz) });
+            break;
+          }
+        }
+      }
+      return chB;
+    }
+    const chB = W.cityId === 'pt' ? storyPT() : storyHod();
 
     // ================= עצים, דקלים, פנסים, רכבים חונים =================
-    const trees = [], palms = [], lamps = [], cars = [];
+    // המיקומים (וההתנגשויות) נקבעים לכל העיר; הרשתות נבנות לפי אריח
+    const lamps = [];
+    let nTrees = 0;
+    const addTree = (x, z, s, palm) => {
+      const t = tileAt(x, z);
+      (palm ? t.palms : t.trees).push([x, z, s]);
+      nTrees++;
+    };
     const treeOK = (x, z, r) => isFree(x, z, r);
     for (const rd of roads) {
       if (rd.cls === 'path' || rd.t === 'service') continue;
@@ -1222,7 +1388,8 @@
               if (rnd() < 0.4) continue;
               const tx = x + nx * side * (rd.w / 2 + 2.6), tz = z + nz * side * (rd.w / 2 + 2.6);
               if (treeOK(tx, tz, 1.2)) {
-                (rd.cls === 'major' && rnd() < 0.45 ? palms : trees).push([tx, tz, 0.85 + rnd() * 0.45]);
+                const palm = rd.cls === 'major' && rnd() < 0.45;
+                addTree(tx, tz, 0.85 + rnd() * 0.45, palm);
                 W.addCircle(tx, tz, 0.4);
               }
             }
@@ -1232,6 +1399,7 @@
             const lx = x + nx * (rd.w / 2 + 0.9), lz = z + nz * (rd.w / 2 + 0.9);
             if (treeOK(lx, lz, 0.6)) {
               lamps.push([lx, lz]);
+              tileAt(lx, lz).lamps.push([lx, lz]);
               W.addCircle(lx, lz, 0.22);
             }
           }
@@ -1250,7 +1418,7 @@
                 }
               });
               if (ok && Math.hypot(cx - SP.vanStart.x, cz - SP.vanStart.z) > 8) {
-                cars.push([cx, cz, Math.atan2(ux, uz) + (rnd() < 0.5 ? Math.PI : 0)]);
+                tileAt(cx, cz).cars.push([cx, cz, Math.atan2(ux, uz) + (rnd() < 0.5 ? Math.PI : 0), (rnd() * 11) | 0]);
                 W.addCircle(cx + ux * 1.1, cz + uz * 1.1, 0.95);
                 W.addCircle(cx - ux * 1.1, cz - uz * 1.1, 0.95);
               }
@@ -1275,115 +1443,99 @@
         const x = minx + rnd() * (maxx - minx), z = minz + rnd() * (maxz - minz);
         if (!pip(x, z, a.p) || !treeOK(x, z, 1.5)) continue;
         if (W.jogPath && W.jogPath.some((p) => Math.hypot(p[0] - x, p[1] - z) < 2.5)) continue;
-        (rnd() < 0.15 ? palms : trees).push([x, z, 0.9 + rnd() * 0.6]);
+        addTree(x, z, 0.9 + rnd() * 0.6, rnd() < 0.15);
         W.addCircle(x, z, 0.45);
       }
     }
-    for (let k = 0; k < 2600 && trees.length < 2400; k++) {
-      const x = (rnd() - 0.5) * 1280, z = (rnd() - 0.5) * 1280;
-      if (!treeOK(x, z, 1.8)) continue;
-      if (nearestRoad(x, z, 16)) {
+    // עצים בחצרות — צפיפות קבועה, עם תקרה לעיר גדולה
+    {
+      const FILL = Math.min(20000, Math.round(2400 * (W.HALF / 640) ** 2)), span = 2 * (W.HALF - 40);
+      let added = 0;
+      for (let k = 0; k < FILL * 1.2 && added < FILL; k++) {
+        const x = (rnd() - 0.5) * span, z = (rnd() - 0.5) * span;
+        if (!treeOK(x, z, 1.8)) continue;
         const r = nearestRoad(x, z, 16);
         if (r && r.d < r.seg.w / 2 + 3) continue;
+        addTree(x, z, 0.8 + rnd() * 0.6, false);
+        W.addCircle(x, z, 0.45);
+        added++;
       }
-      trees.push([x, z, 0.8 + rnd() * 0.6]);
-      W.addCircle(x, z, 0.45);
     }
+    W.lamps = lamps;
     const col = new T.Color();
-    {
-      const trunks = new T.InstancedMesh(new T.CylinderGeometry(0.17, 0.24, 1.6, 6), lam(0x6b4a2b), trees.length);
-      const leaves = new T.InstancedMesh(new T.IcosahedronGeometry(1.35, 0), lam(0xffffff, { flatShading: true }), trees.length);
-      const leaves2 = new T.InstancedMesh(new T.IcosahedronGeometry(0.95, 0), lam(0xffffff, { flatShading: true }), trees.length);
-      trees.forEach(([x, z, s], i) => {
-        const hue = 0.22 + rnd() * 0.09, li = 0.27 + rnd() * 0.08;
-        q4.setFromAxisAngle(UP, rnd() * 6);
-        s3.set(s, s, s);
-        p3.set(x, 0.8 * s, z);
-        m4.compose(p3, q4, s3);
-        trunks.setMatrixAt(i, m4);
-        s3.set(s, s * 0.9, s);
-        p3.set(x, 2.2 * s, z);
-        m4.compose(p3, q4, s3);
-        leaves.setMatrixAt(i, m4);
-        col.setHSL(hue, 0.45, li);
-        leaves.setColorAt(i, col);
-        s3.set(s, s, s);
-        p3.set(x + 0.25 * s, 3.05 * s, z + 0.25 * s);
-        m4.compose(p3, q4, s3);
-        leaves2.setMatrixAt(i, m4);
-        col.setHSL(hue + 0.02, 0.48, li + 0.09);
-        leaves2.setColorAt(i, col);
-      });
-      trunks.castShadow = leaves.castShadow = leaves2.castShadow = true;
-      scene.add(trunks, leaves, leaves2);
+    const trunkGeo = new T.CylinderGeometry(0.17, 0.24, 1.6, 6), trunkMat = lam(0x6b4a2b);
+    const leafGeo = new T.IcosahedronGeometry(1.35, 0), leafGeo2 = new T.IcosahedronGeometry(0.95, 0);
+    const leafMat = lam(0xffffff, { flatShading: true }), leafMat2 = lam(0xffffff, { flatShading: true });
+    const frond = [];
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2;
+      frond.push({ w: 0.35, h: 0.06, d: 2.4, x: Math.sin(a) * 1.0, y: 0, z: Math.cos(a) * 1.0, ry: a, rx: 0.35, c: k % 2 ? '#3f7d34' : '#4d8f3c' });
     }
-    {
-      // דקלים: גזע גבוה ועלים כמו כוכב
-      const frond = [];
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * Math.PI * 2;
-        frond.push({ w: 0.35, h: 0.06, d: 2.4, x: Math.sin(a) * 1.0, y: 0, z: Math.cos(a) * 1.0, ry: a, rx: 0.35, c: k % 2 ? '#3f7d34' : '#4d8f3c' });
-      }
-      const frondGeo = G.mergeParts(frond);
-      const pTr = new T.InstancedMesh(new T.CylinderGeometry(0.16, 0.24, 6, 6), lam(0x8a6a44), palms.length);
-      const pLf = new T.InstancedMesh(frondGeo, vcMat(), palms.length);
-      palms.forEach(([x, z, s], i) => {
-        q4.setFromAxisAngle(UP, rnd() * 6);
-        s3.set(s, s, s);
-        p3.set(x, 3 * s, z);
-        m4.compose(p3, q4, s3);
-        pTr.setMatrixAt(i, m4);
-        p3.set(x, 6 * s, z);
-        m4.compose(p3, q4, s3);
-        pLf.setMatrixAt(i, m4);
-      });
-      pTr.castShadow = pLf.castShadow = true;
-      scene.add(pTr, pLf);
-    }
+    const frondGeo = G.mergeParts(frond), frondMat = vcMat();
+    const palmGeo = new T.CylinderGeometry(0.16, 0.24, 6, 6), palmMat = lam(0x8a6a44);
     const lampGeo = G.mergeParts([
       { w: 0.4, h: 0.3, d: 0.4, y: 0.15, c: '#2c3039' },
       { g: 'cyl', r: 0.08, h: 4.6, y: 2.4, c: '#3a3f4a', seg: 6 },
       { w: 0.5, h: 0.08, d: 0.5, y: 4.78, c: '#2c3039' },
     ]);
-    const postIM = new T.InstancedMesh(lampGeo, vcMat(), lamps.length);
+    const lampMat = vcMat();
     const bulbMat = new T.MeshBasicMaterial({ color: 0xcccccc });
-    const bulbIM = new T.InstancedMesh(new T.BoxGeometry(0.36, 0.38, 0.36), bulbMat, lamps.length);
+    const bulbGeo2 = new T.BoxGeometry(0.36, 0.38, 0.36);
     const glowGeo = new T.PlaneGeometry(13, 13);
     glowGeo.rotateX(-Math.PI / 2);
     const glowMat = new T.MeshBasicMaterial({ map: G.glowTex('255,214,130'), transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending });
-    const glowIM = new T.InstancedMesh(glowGeo, glowMat, lamps.length);
-    lamps.forEach(([x, z], i) => {
-      m4.makeTranslation(x, 0, z);
-      postIM.setMatrixAt(i, m4);
-      m4.makeTranslation(x, 4.55, z);
-      bulbIM.setMatrixAt(i, m4);
-      m4.makeTranslation(x, 0.08, z);
-      glowIM.setMatrixAt(i, m4);
-    });
-    postIM.castShadow = true;
-    scene.add(postIM, bulbIM, glowIM);
-    W.lamps = lamps;
-    {
-      const carGeo = G.mergeParts([
-        { w: 1.8, h: 0.75, d: 3.9, y: 0.65, c: '#ffffff' },
-        { w: 1.62, h: 0.44, d: 2.02, y: 1.24, z: -0.25, c: '#26303d' },
-        { w: 1.6, h: 0.14, d: 1.9, y: 1.52, z: -0.25, c: '#ffffff' },
-        { w: 0.24, h: 0.6, d: 0.6, x: -0.86, y: 0.3, z: 1.25, c: '#1a1a1a' },
-        { w: 0.24, h: 0.6, d: 0.6, x: 0.86, y: 0.3, z: 1.25, c: '#1a1a1a' },
-        { w: 0.24, h: 0.6, d: 0.6, x: -0.86, y: 0.3, z: -1.25, c: '#1a1a1a' },
-        { w: 0.24, h: 0.6, d: 0.6, x: 0.86, y: 0.3, z: -1.25, c: '#1a1a1a' },
-      ]);
-      const carIM = new T.InstancedMesh(carGeo, vcMat(), cars.length);
-      const CAR_COLS = [0xc0392b, 0x2980b9, 0x16a085, 0xf39c12, 0x8e44ad, 0x7f8c8d, 0xecf0f1, 0x2c3e50, 0xbdc3c7, 0x34495e, 0xd35400];
-      cars.forEach(([x, z, ry], i) => {
-        q4.setFromAxisAngle(UP, ry);
-        p3.set(x, 0, z);
-        m4.compose(p3, q4, s3);
-        carIM.setMatrixAt(i, m4);
-        carIM.setColorAt(i, col.set(pick(CAR_COLS)));
-      });
-      carIM.castShadow = true;
-      scene.add(carIM);
+    const carGeo = G.mergeParts([
+      { w: 1.8, h: 0.75, d: 3.9, y: 0.65, c: '#ffffff' },
+      { w: 1.62, h: 0.44, d: 2.02, y: 1.24, z: -0.25, c: '#26303d' },
+      { w: 1.6, h: 0.14, d: 1.9, y: 1.52, z: -0.25, c: '#ffffff' },
+      { w: 0.24, h: 0.6, d: 0.6, x: -0.86, y: 0.3, z: 1.25, c: '#1a1a1a' },
+      { w: 0.24, h: 0.6, d: 0.6, x: 0.86, y: 0.3, z: 1.25, c: '#1a1a1a' },
+      { w: 0.24, h: 0.6, d: 0.6, x: -0.86, y: 0.3, z: -1.25, c: '#1a1a1a' },
+      { w: 0.24, h: 0.6, d: 0.6, x: 0.86, y: 0.3, z: -1.25, c: '#1a1a1a' },
+    ]);
+    const carMat = vcMat();
+    const CAR_COLS = [0xc0392b, 0x2980b9, 0x16a085, 0xf39c12, 0x8e44ad, 0x7f8c8d, 0xecf0f1, 0x2c3e50, 0xbdc3c7, 0x34495e, 0xd35400];
+    const setM = (im, i, x, y, z, ry, sx, sy, sz) => {
+      q4.setFromAxisAngle(UP, ry);
+      p3.set(x, y, z);
+      s3.set(sx, sy, sz);
+      m4.compose(p3, q4, s3);
+      im.setMatrixAt(i, m4);
+    };
+    function buildTileProps(t, r) {
+      const tr = t.trees;
+      if (tr.length) {
+        const rr = tr.map(() => [r() * 6, 0.22 + r() * 0.09, 0.27 + r() * 0.08]);
+        inst(t.grp, trunkGeo, trunkMat, tr.length, (im, i) => setM(im, i, tr[i][0], 0.8 * tr[i][2], tr[i][1], rr[i][0], tr[i][2], tr[i][2], tr[i][2]), true);
+        inst(t.grp, leafGeo, leafMat, tr.length, (im, i) => {
+          const s = tr[i][2];
+          setM(im, i, tr[i][0], 2.2 * s, tr[i][1], rr[i][0], s, s * 0.9, s);
+          im.setColorAt(i, col.setHSL(rr[i][1], 0.45, rr[i][2]));
+        }, true);
+        inst(t.grp, leafGeo2, leafMat2, tr.length, (im, i) => {
+          const s = tr[i][2];
+          setM(im, i, tr[i][0] + 0.25 * s, 3.05 * s, tr[i][1] + 0.25 * s, rr[i][0], s, s, s);
+          im.setColorAt(i, col.setHSL(rr[i][1] + 0.02, 0.48, rr[i][2] + 0.09));
+        }, true);
+      }
+      const pa = t.palms;
+      if (pa.length) {
+        const ry = pa.map(() => r() * 6);
+        inst(t.grp, palmGeo, palmMat, pa.length, (im, i) => setM(im, i, pa[i][0], 3 * pa[i][2], pa[i][1], ry[i], pa[i][2], pa[i][2], pa[i][2]), true);
+        inst(t.grp, frondGeo, frondMat, pa.length, (im, i) => setM(im, i, pa[i][0], 6 * pa[i][2], pa[i][1], ry[i], pa[i][2], pa[i][2], pa[i][2]), true);
+      }
+      const la = t.lamps;
+      if (la.length) {
+        inst(t.grp, lampGeo, lampMat, la.length, (im, i) => setM(im, i, la[i][0], 0, la[i][1], 0, 1, 1, 1), true);
+        inst(t.grp, bulbGeo2, bulbMat, la.length, (im, i) => setM(im, i, la[i][0], 4.55, la[i][1], 0, 1, 1, 1), false);
+        inst(t.grp, glowGeo, glowMat, la.length, (im, i) => setM(im, i, la[i][0], 0.08, la[i][1], 0, 1, 1, 1), false);
+      }
+      const ca = t.cars;
+      if (ca.length)
+        inst(t.grp, carGeo, carMat, ca.length, (im, i) => {
+          setM(im, i, ca[i][0], 0, ca[i][1], ca[i][2], 1, 1, 1);
+          im.setColorAt(i, col.set(CAR_COLS[ca[i][3]]));
+        }, true);
     }
 
     // ================= חזיתות חנויות לאורך רחובות ראשיים =================
@@ -1416,7 +1568,23 @@
       g.fillStyle = '#ffd890';
       g.fillRect(2, 2, 18, 15);
     }, true);
+    // חומר חזית אחד לכל אורך (1–4 חלונות ראווה) — משותף לכל החנויות
+    const frontMats = {};
+    const frontMat = (rep) => frontMats[rep] || (frontMats[rep] = (() => {
+      const tex = shopBase.clone();
+      tex.needsUpdate = true;
+      tex.repeat.set(rep, 1);
+      const m = new T.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: shopEmi, emissiveIntensity: 0 });
+      shopFronts.push(m);
+      return m;
+    })());
     const signMats = {};
+    const signMat = (kind) => signMats[kind[0]] || (signMats[kind[0]] = (() => {
+      const t = G.textTex(kind[0], { w: 128, h: 24, size: 17, bg: kind[1], fg: '#ffffff', border: '#ffffff' });
+      const m = new T.MeshLambertMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.15 });
+      W.litSigns.push(m);
+      return m;
+    })());
     for (const b of B) {
       if (b.used || b.office || b.area < 60 || b.area > 3000 || !b.edges) continue;
       let best = null, bd = 1e9;
@@ -1434,55 +1602,45 @@
       if (!best || rnd() < 0.25) continue;
       b.shop = true;
       (W.shops || (W.shops = [])).push({ x: best.mx + best.nx * 1.6, z: best.mz + best.nz * 1.6, ang: Math.atan2(best.nx, best.nz), nx: best.nx, nz: best.nz, ux: (best.bx - best.ax) / best.L, uz: (best.bz - best.az) / best.L });
-      const fl = Math.min(best.L - 0.6, 14);
-      const tex = shopBase.clone();
-      tex.needsUpdate = true;
-      tex.repeat.set(Math.max(1, Math.round(fl / 4)), 1);
-      const front = new T.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: shopEmi, emissiveIntensity: 0 });
-      shopFronts.push(front);
-      const kind = pick(SHOPS);
-      const sm = signMats[kind[0]] || (signMats[kind[0]] = (() => {
-        const t = G.textTex(kind[0], { w: 128, h: 24, size: 17, bg: kind[1], fg: '#ffffff', border: '#ffffff' });
-        const m = new T.MeshLambertMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.15 });
-        W.litSigns.push(m);
-        return m;
-      })());
-      const g = new T.Group();
-      g.position.set(best.mx, 0, best.mz);
-      g.rotation.y = Math.atan2(best.nx, best.nz);
-      const fp = new T.Mesh(new T.PlaneGeometry(fl, 2.55), front);
-      fp.position.set(0, 1.3, 0.05);
-      const sp = new T.Mesh(new T.PlaneGeometry(Math.min(fl, 5), 0.7), sm);
-      sp.position.set(0, 3.0, 0.07);
-      g.add(fp, sp);
-      scene.add(g);
+      tileAt(b.cx, b.cz).shops.push({ e: best, fl: Math.min(best.L - 0.6, 14), kind: pick(SHOPS) });
+    }
+    function buildTileShops(t) {
+      for (const s of t.shops) {
+        const e = s.e, fl = s.fl;
+        const g = new T.Group();
+        g.position.set(e.mx, 0, e.mz);
+        g.rotation.y = Math.atan2(e.nx, e.nz);
+        const fp = new T.Mesh(new T.PlaneGeometry(fl, 2.55), frontMat(Math.max(1, Math.min(4, Math.round(fl / 4)))));
+        fp.position.set(0, 1.3, 0.05);
+        const sp = new T.Mesh(new T.PlaneGeometry(Math.min(fl, 5), 0.7), signMat(s.kind));
+        sp.position.set(0, 3.0, 0.07);
+        fp.userData.own = sp.userData.own = true;
+        g.add(fp, sp);
+        t.grp.add(g);
+      }
     }
 
     // ================= מרפסות, כניסות ומספרי בתים =================
     // מאוחדים לרשת אחת לכל אריח, כך שאלפי הפרטים לא מכבידים על הציור
-    {
-      const detailTiles = new Map();
-      const addD = (x, z, spec) => {
-        const k = Math.floor(x / TILE) + ',' + Math.floor(z / TILE);
-        let a = detailTiles.get(k);
-        if (!a) detailTiles.set(k, (a = []));
-        a.push(spec);
-      };
-      const RAILS = ['#9fc4d6', '#e8e4dc', '#3a3f46', '#c9c2b6'];
-      const DOORS = ['#6b3e1f', '#3d3d3d', '#7a5a3a', '#2c3e50', '#8a8a8a'];
-      let houseNo = 1;
-      for (const b of B) {
+    const RAILS = ['#9fc4d6', '#e8e4dc', '#3a3f46', '#c9c2b6'];
+    const DOORS = ['#6b3e1f', '#3d3d3d', '#7a5a3a', '#2c3e50', '#8a8a8a'];
+    const dMat = vcMat();
+    function buildTileDetails(t, r) {
+      const specs = [];
+      const addD = (x, z, spec) => specs.push(spec);
+      const pk = (a) => a[(r() * a.length) | 0];
+      for (const b of t.B) {
         if (!b.edges || b.area < 40 || b.kind === 'garage' || b.kind === 'roof' || b.kind === 'shed') continue;
         // הצלע הקדמית: הקרובה ביותר לכביש ופונה אליו
         let front = null, fs = 1e9;
         for (const e of b.edges) {
           if (e.L < 3) continue;
-          const r = nearestRoad(e.mx, e.mz, 40);
-          if (!r) continue;
-          const dot = e.nx * (r.x - e.mx) + e.nz * (r.z - e.mz);
+          const rd = nearestRoad(e.mx, e.mz, 40);
+          if (!rd) continue;
+          const dot = e.nx * (rd.x - e.mx) + e.nz * (rd.z - e.mz);
           if (dot <= 0) continue;
-          if (r.d < fs) {
-            fs = r.d;
+          if (rd.d < fs) {
+            fs = rd.d;
             front = e;
           }
         }
@@ -1490,51 +1648,97 @@
         // כניסה: דלת, משקוף, מנורה ושלט מספר כחול
         if (front && !b.shop && !b.used && !b.office) {
           const ux = (front.bx - front.ax) / front.L, uz = (front.bz - front.az) / front.L;
-          const t = front.L * (0.3 + rnd() * 0.4);
-          const x = front.ax + ux * t, z = front.az + uz * t, ry = ang(front);
-          const P = (o, ly) => [x + front.nx * o, z + front.nz * o];
+          const tt = front.L * (0.3 + r() * 0.4);
+          const x = front.ax + ux * tt, z = front.az + uz * tt, ry = ang(front);
+          const P = (o) => [x + front.nx * o, z + front.nz * o];
           const [dx, dz] = P(0.05), [fx, fz] = P(0.03), [sx, sz] = P(0.25), [nx, nz] = P(0.04);
           addD(x, z, { w: 1.6, h: 2.5, d: 0.06, x: fx, y: 1.25, z: fz, ry, c: '#d9d3c8' });
-          addD(x, z, { w: 1.2, h: 2.2, d: 0.1, x: dx, y: 1.1, z: dz, ry, c: pick(DOORS) });
+          addD(x, z, { w: 1.2, h: 2.2, d: 0.1, x: dx, y: 1.1, z: dz, ry, c: pk(DOORS) });
           addD(x, z, { w: 1.9, h: 0.12, d: 0.6, x: sx, y: 0.06, z: sz, ry, c: '#b9b3a8' });
           addD(x, z, { w: 1.9, h: 0.1, d: 0.8, x: sx, y: 2.62, z: sz, ry, c: '#cfc8bb' });
           const [px, pz] = [nx + ux * 1.15, nz + uz * 1.15];
           addD(x, z, { w: 0.34, h: 0.24, d: 0.04, x: px, y: 1.9, z: pz, ry, c: '#1f5fbf' });
-          b.no = houseNo++;
         }
         // מרפסות בבנייני דירות
         if (b.levels >= 3 && !b.office) {
-          const rail = pick(RAILS);
+          const rail = pk(RAILS);
           for (const e of b.edges) {
             if (e.L < 6.5) continue;
             const isFront = e === front;
-            if (!isFront && rnd() < 0.55) continue;
+            if (!isFront && r() < 0.55) continue;
             const ux = (e.bx - e.ax) / e.L, uz = (e.bz - e.az) / e.L, ry = ang(e);
             const n = Math.min(3, Math.floor(e.L / 5.5));
             for (let k = 0; k < n; k++) {
-              const t = ((k + 0.5) / n) * e.L;
+              const tt = ((k + 0.5) / n) * e.L;
               for (let fl = 1; fl < b.levels; fl++) {
                 const y = fl * 3.2 + 0.05;
-                const cx = e.ax + ux * t, cz = e.az + uz * t;
+                const cx = e.ax + ux * tt, cz = e.az + uz * tt;
                 const at = (o) => [cx + e.nx * o, cz + e.nz * o];
                 const [sx, sz] = at(0.6), [rx, rz] = at(1.18);
                 addD(cx, cz, { w: 3.0, h: 0.16, d: 1.2, x: sx, y, z: sz, ry, c: '#d8d2c6' });
                 addD(cx, cz, { w: 3.0, h: 0.95, d: 0.05, x: rx, y: y + 0.55, z: rz, ry, c: rail });
                 for (const s of [-1.48, 1.48]) addD(cx, cz, { w: 0.05, h: 0.95, d: 1.2, x: sx + ux * s, y: y + 0.55, z: sz + uz * s, ry, c: rail });
-                if (rnd() < 0.25) addD(cx, cz, { w: 0.4, h: 0.45, d: 0.4, x: sx + ux * 0.9, y: y + 0.3, z: sz + uz * 0.9, ry, c: '#3f8f3a' });
+                if (r() < 0.25) addD(cx, cz, { w: 0.4, h: 0.45, d: 0.4, x: sx + ux * 0.9, y: y + 0.3, z: sz + uz * 0.9, ry, c: '#3f8f3a' });
               }
             }
           }
         }
       }
-      const dMat = vcMat();
-      for (const specs of detailTiles.values()) {
-        const m = new T.Mesh(G.mergeParts(specs), dMat);
-        m.castShadow = true;
-        m.receiveShadow = true;
-        scene.add(m);
-      }
+      if (!specs.length) return;
+      const m = new T.Mesh(G.mergeParts(specs), dMat);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.userData.own = true;
+      t.grp.add(m);
     }
+
+    // ================= הזרמת אריחים: בונים קרוב, משחררים רחוק =================
+    const R_BUILD = 330, R_DROP = 460;
+    W.tiles = tiles;
+    function buildTile(t) {
+      t.grp = new T.Group();
+      t.bmeshes = [];
+      const r = G.rng(t.seed + 17);
+      buildTileBuildings(t, r);
+      buildTileProps(t, r);
+      buildTileShops(t);
+      buildTileDetails(t, r);
+      scene.add(t.grp);
+      for (const m of t.bmeshes) W.buildings.push(m);
+    }
+    function dropTile(t) {
+      scene.remove(t.grp);
+      t.grp.traverse((o) => {
+        if (o.isInstancedMesh) o.dispose();
+        else if (o.isMesh && o.userData.own) o.geometry.dispose();
+      });
+      for (const m of t.bmeshes) {
+        const i = W.buildings.indexOf(m);
+        if (i >= 0) W.buildings.splice(i, 1);
+      }
+      t.grp = null;
+      t.bmeshes = null;
+    }
+    // all=true: בונים מיד את כל מה שבטווח (בטעינה ובקפיצה למקום אחר)
+    W.stream = function (x, z, all) {
+      let budget = all ? 1e9 : 3;
+      const cand = [];
+      for (const t of tiles.values()) {
+        const d = Math.hypot(t.cx - x, t.cz - z);
+        if (!t.grp && d < R_BUILD) cand.push([d, t]);
+        else if (t.grp && d > R_DROP) dropTile(t);
+      }
+      cand.sort((a, b) => a[0] - b[0]);
+      for (const c of cand) {
+        if (budget-- <= 0) break;
+        buildTile(c[1]);
+      }
+    };
+    W.builtTiles = () => {
+      let n = 0;
+      for (const t of tiles.values()) if (t.grp) n++;
+      return n;
+    };
 
     // ================= מסלולי הליכה להולכי רגל =================
     for (const rd of roads) {
@@ -1594,8 +1798,8 @@
     W.locationName = function (x, z) {
       for (const p of W.places) if (Math.hypot(x - p.x, z - p.z) < p.r) return [p.he, p.en];
       const r = nearestRoad(x, z, 40, (o) => !!o.rd.name);
-      if (r && r.d < 30) return [r.seg.rd.name, r.seg.rd.ne || 'Hod HaSharon'];
-      return ['הוד השרון', 'Hod HaSharon'];
+      if (r && r.d < 30) return [r.seg.rd.name, r.seg.rd.ne || W.cityEn];
+      return [W.cityName, W.cityEn];
     };
 
     // ================= יום, לילה ותנועה =================
@@ -1615,7 +1819,8 @@
     }, true, true);
     cloudTex.repeat.set(10, 10);
     const cloudMat = new T.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0.15, depthWrite: false });
-    const clouds = new T.Mesh(new T.PlaneGeometry(1600, 1600), cloudMat);
+    const clouds = new T.Mesh(new T.PlaneGeometry(GS, GS), cloudMat);
+    cloudTex.repeat.set(GS / 160, GS / 160);
     clouds.rotation.x = -Math.PI / 2;
     clouds.position.y = 0.1;
     clouds.renderOrder = 1;
@@ -1629,8 +1834,14 @@
       cloudMat.opacity = 0.15 * (1 - n);
       for (const m of W.litSigns) m.emissiveIntensity = 0.3 + n * 0.7;
     };
+    let streamF = 0, streamed = false;
     W.update = function (t) {
       cloudTex.offset.set(t * 0.0012, t * 0.0006);
+      // המשחק מעדכן את W.fx/W.fz (מרכז המצלמה); בפעם הראשונה בונים הכול בבת אחת
+      if (W.fx !== undefined && (!streamed || ++streamF % 6 === 0)) {
+        W.stream(W.fx, W.fz, !streamed);
+        streamed = true;
+      }
     };
     return W;
   };

@@ -6,3 +6,6 @@ music/playlist.local.js
 
 # תוצרי אריזה
 dist/
+
+# נתוני מפה גולמיים (גדולים; המשחק משתמש בקובץ המומר data/city-pt.js)
+data/raw/

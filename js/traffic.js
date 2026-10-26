@@ -55,7 +55,8 @@
       if (signals.some((s) => Math.hypot(s.n.x - n.x, s.n.z - n.z) < 30)) continue;
       const axes = new Set(inc.map(axisOf));
       if (axes.size < 2) continue;
-      const sig = { n, offset: rnd() * 16, heads: [] };
+      const sig = { n, offset: rnd() * 16, heads: [], grp: new T.Group() };
+      scene.add(sig.grp);
       n.signal = sig;
       signals.push(sig);
       // עמוד בפינה, עם ראש לכל ציר
@@ -65,7 +66,7 @@
       const pole = new T.Mesh(new T.CylinderGeometry(0.09, 0.11, 4.2, 6), new T.MeshLambertMaterial({ color: 0x3a3f46 }));
       pole.position.set(px, 2.1, pz);
       pole.castShadow = true;
-      scene.add(pole);
+      sig.grp.add(pole);
       W.addCircle(px, pz, 0.25);
       for (const ax of [0, 1]) {
         const head = new T.Group();
@@ -83,7 +84,7 @@
           }
           L[k] = mat;
         });
-        scene.add(head);
+        sig.grp.add(head);
         sig.heads[ax] = L;
       }
       // מעברי חצייה על כל כביש שנכנס לצומת
@@ -118,9 +119,16 @@
       const local = ax === 0 ? t : (t + half) % PERIOD;
       return local < 7 ? 'g' : local < 8.5 ? 'y' : 'r';
     };
+    let sigVisT = 0;
     function updateSignals(dt) {
       sigClock += dt;
+      // רמזורים רחוקים מוסתרים (בעיר גדולה יש מאות)
+      if ((sigVisT -= dt) <= 0) {
+        sigVisT = 0.5;
+        for (const s of signals) s.grp.visible = Math.hypot(s.n.x - player.x, s.n.z - player.z) < 320;
+      }
       for (const s of signals)
+        if (s.grp.visible)
         for (const ax of [0, 1]) {
           const st = stateOf(s, ax), L = s.heads[ax];
           for (const k of ['r', 'y', 'g']) L[k].color.setHex(k === st ? lampOn[k] : lampOff[k]);
@@ -178,9 +186,25 @@
       c.x = e.from.x + dx * c.t - dz * L;
       c.z = e.from.z + dz * c.t + dx * L;
     }
+    // אינדקס קטעים לפי משבצות של 200 מטר — כדי למצוא מהר קטע ליד השחקן גם בעיר גדולה
+    const egrid = new Map();
+    for (const e of edges) {
+      const k = Math.floor(e.from.x / 200) + ',' + Math.floor(e.from.z / 200);
+      if (!egrid.has(k)) egrid.set(k, []);
+      egrid.get(k).push(e);
+    }
+    function edgesNear(px, pz) {
+      const out = [], cx = Math.floor(px / 200), cz = Math.floor(pz / 200);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const a = egrid.get(cx + i + ',' + (cz + j));
+        if (a) for (const e of a) out.push(e);
+      }
+      return out.length ? out : edges;
+    }
     function spawn(c, px, pz, far) {
+      const near = edgesNear(px, pz);
       for (let k = 0; k < 40; k++) {
-        const e = edges[(rnd() * edges.length) | 0];
+        const e = near[(rnd() * near.length) | 0];
         const d = Math.hypot(e.from.x - px, e.from.z - pz);
         if (d > (far ? 70 : 15) && d < 230 && (!c.bus || e.speed > 9)) {
           c.e = e;

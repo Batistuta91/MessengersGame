@@ -48,6 +48,7 @@
     </div>
 
     <div id="street-sign"><b id="st-he"></b><small id="st-en"></small></div>
+    <div id="travel" class="hidden"><div class="tv-box"><div class="tv-van">🚐</div><b>נוסעים ל<span id="travel-to"></span>...</b><small>הטנק בדרך</small></div></div>
     <div id="call" class="hidden"><div class="call-ic">📞</div><div class="call-who"><b>משה</b><small>מתקשר אליך…</small></div><button id="call-yes" class="btn">ענה <kbd>E</kbd></button><button id="call-no" class="btn danger">דחה</button></div>
     <div id="bounds-warn" class="hidden"><span>⚠ יצאתם מתחומי העיר — חזרו אחורה</span><i id="bounds-arrow">➜</i></div>
     <div id="radio-label"></div>
@@ -122,6 +123,7 @@
         <button id="p-sound" class="btn">צליל: פועל</button>
         <button id="p-voice" class="btn">קולות דמויות: פועלים</button>
         <button id="p-shadows" class="btn">גרפיקה: מלאה</button>
+        <button id="p-travel" class="btn hidden">🚐 נסיעה לפתח תקווה</button>
         <button id="p-unstick" class="btn">🆘 תקועים? חזרה לבית חב״ד</button>
         <button id="p-restart" class="btn danger">התחלה מחדש</button>
       </div>
@@ -182,9 +184,22 @@
   <script src="js/audio.js"></script>
   <script src="js/entities.js"></script>
   <script src="js/world.js"></script>
-  <script src="data/city.js"></script>
+  <script>
+    // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
+    (function () {
+      var c = 'hod';
+      try {
+        var s = JSON.parse(localStorage.getItem('shluchim-demo-v1') || 'null');
+        if (s && s.city) c = s.city;
+      } catch (e) {}
+      var m = /[?&]city=(\w+)/.exec(location.search);
+      if (m) c = m[1];
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '"><\/script>');
+    })();
+  </script>
   <script src="js/city.js"></script>
   <script src="js/missions.js"></script>
+  <script src="js/missions-pt.js"></script>
   <script src="js/traffic.js"></script>
   <script src="js/events.js"></script>
   <script src="js/voice.js"></script>

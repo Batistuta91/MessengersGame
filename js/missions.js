@@ -819,12 +819,23 @@
         d: { s: 'npc', t: 'החנוכייה מחכה.' },
       }),
     };
+    const PT_OFFER = () => ({
+      a: { s: 'npc', t: 'יש לי בקשה גדולה. ר׳ מנחם, השליח בפתח תקווה, צריך יד: השוק לפני שבת, ביקור חולים בשניידר, וספר תורה חדש לבית הכנסת הגדול.', go: 'b' },
+      b: {
+        s: 'npc', t: 'תיסע אליו עם הטנק? פה בהוד השרון הכול מסודר — ותמיד אפשר לחזור, מתפריט ההשהיה.',
+        c: [
+          { t: 'יוצא לפתח תקווה!', fx: () => api.travel('pt') },
+          { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.ptUnlocked = true; api.toast('אפשר לנסוע לפתח תקווה מתפריט ההשהיה (' + (isTouch ? 'כפתור השהיה' : 'Esc') + ')', 'gold'); } },
+        ],
+      },
+    });
     function mosheDialog() {
       const a = activeId();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (a !== 'secret' ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx](q(nx).status === 'failed');
       if (q('secret').status === 'idle') return { a: { s: 'npc', t: 'ר׳ זלמן... עוד לא הלכת אליו? אין לחץ — אבל הוא מחכה.', c: [{ t: 'אני הולך עכשיו.', fx: startSecret }, { t: 'עוד מעט' }] } };
+      if (done('m4') && S().flags.ptUnlocked) return { a: { s: 'npc', t: 'ר׳ מנחם מחכה לך בפתח תקווה! נוסעים מתפריט ההשהיה. ' + (S().chabadLevel < 3 ? 'ואל תשכח לשדרג את בית חב״ד למרכז קהילתי — היכנס בדלת.' : 'אני שומר פה על הבית.') } };
       if (done('m4') && S().chabadLevel < 3) return { a: { s: 'npc', t: 'ראית את הכיכר? כל העיר מוארת! עכשיו הזמן להפוך את בית חב״ד למרכז קהילתי — היכנס בדלת.' } };
       if (done('m4') && !done('secret') && S().community < 6) return { a: { s: 'npc', t: 'השכונה מתעוררת. תמשיך להכיר אנשים — לפעמים דווקא השיחה הקטנה פותחת את הדלת הגדולה.' } };
       if (done('secret')) return { a: { s: 'npc', t: 'עשית פה עולם ומלואו, שליח. ר׳ זלמן חזר, יש מניין, יש שולחן שבת ויש אור בכיכר. דרגה 4 — ״מרכז השליחות הגדול״ — מחכה בגרסה המלאה.' } };
@@ -1078,7 +1089,11 @@
       callOffer() {
         if (activeId()) return null;
         const nx = nextQuest();
-        return nx && available(nx) && q(nx).status !== 'failed' ? { id: nx, nodes: OFFER[nx](false) } : null;
+        if (nx && available(nx) && q(nx).status !== 'failed') return { id: nx, nodes: OFFER[nx](false) };
+        // אחרי ״האור הגדול״ (ואחרי ר׳ זלמן, אם הגיע תורו): פרק 2 — פתח תקווה
+        const sc = q('secret').status;
+        if (!nx && !S().flags.ptUnlocked && (sc === 'complete' || sc === 'idle' || !available('secret'))) return { id: 'pt', nodes: PT_OFFER() };
+        return null;
       },
       canUpgrade(lv) {
         return lv === 3 && done('m4');

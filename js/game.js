@@ -209,6 +209,19 @@
     S.settings = Object.assign(freshState().settings, saved.settings);
     S.quests = Object.assign({}, saved.quests || {});
   }
+  // ---------- העיר הנוכחית: כל עיר זוכרת את המיקומים שלה ----------
+  const CITY = W.cityId || 'hod';
+  S.cities = S.cities || {};
+  if ((S.posCity || 'hod') !== CITY) {
+    const c = S.cities[CITY], f = freshState();
+    S.player = c ? c.player : f.player;
+    S.van = c ? c.van : f.van;
+    S.rides = c ? c.rides : {};
+    S.inVan = false;
+    S.ride = null;
+  }
+  S.posCity = CITY;
+  S.city = CITY;
   let resetting = false;
   function save() {
     if (resetting) return;
@@ -287,11 +300,14 @@
     npcById[d.id] = n;
     return n;
   }
+  // בפתח תקווה: במקום משה — ר׳ מנחם, השליח של העיר; דמויות פרק 1 נשארות בהוד השרון
+  if (CITY === 'pt') Object.assign(NPC_DEFS[0], { name: 'ר׳ מנחם', role: 'השליח של פתח תקווה', look: { shirt: 0xffffff, jacket: 0x1a1a1a, pants: 0x1a1a1a, skin: 0xe2b088, hat: 'fedora', beard: 0x6b4a2b } });
   for (const d of NPC_DEFS) {
     const sp = SPOT[d.id];
     if (sp) Object.assign(d, { x: sp.x, z: sp.z, rot: sp.rot || 0 });
     addNPC(d);
   }
+  if (CITY === 'pt') for (const id of TARGET_IDS) npcById[id].hidden = true;
 
   // ---------- הולכי רגל ----------
   const wr = G.rng(18);
@@ -358,7 +374,7 @@
     const a = C[s], b = C[(s + 1) % 4];
     return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
   }
-  const JOG = mkPath(W.jogPath, true);
+  const JOG = mkPath(W.jogPath || [[SPOT.playerStart.x, SPOT.playerStart.z], [SPOT.playerStart.x + 20, SPOT.playerStart.z], [SPOT.playerStart.x + 20, SPOT.playerStart.z + 20]], true);
   const jogPoint = (s) => pathPoint(JOG, s);
 
   // ---------- סמנים בעולם ----------
@@ -1100,7 +1116,10 @@
     if (cur.kind === 'quest') cur.run();
     else if (cur.kind === 'npc') talkTo(cur.ref);
     else if (cur.kind === 'van') enterVehicle(cur.ref);
-    else if (cur.kind === 'door') openPanel();
+    else if (cur.kind === 'door') {
+      if (CITY === 'pt') toast('בית חב״ד פתח תקווה — ר׳ מנחם מארח אתכם כאן 💙');
+      else openPanel();
+    }
     else if (cur.kind === 'walker') {
       const w = cur.ref;
       w.wait = 2.5;
@@ -1146,6 +1165,7 @@
   };
 
   function dlgMoshe() {
+    if (CITY === 'pt') return M.mosheDialog();
     const m = S.mission;
     if (m.status === 'idle')
       return {
@@ -1606,6 +1626,8 @@
   }
   function pauseGame() {
     if (G.voice) G.voice.stop();
+    $('p-travel').textContent = CITY === 'pt' ? '🚐 חזרה להוד השרון' : '🚐 נסיעה לפתח תקווה';
+    show($('p-travel'), !!S.flags.ptUnlocked || CITY === 'pt');
     mode = 'paused';
     refreshSettingsLabels();
     show($('pause'), true);
@@ -1688,6 +1710,11 @@
   $('btn-new').addEventListener('click', () => openConfirm());
   function startPlay() {
     mode = 'play';
+    if (S.flags.justTraveled) {
+      const to = S.flags.justTraveled;
+      S.flags.justTraveled = null;
+      setTimeout(() => toast(to === 'pt' ? '🚐 ברוכים הבאים לפתח תקווה! ר׳ מנחם מחכה ליד בית חב״ד' : '🚐 חזרתם להוד השרון — משה שמח לראות אתכם', 'gold'), 800);
+    }
     show(ui.title, false);
     show(ui.hud, true);
     show(ui.touch, isTouch);
@@ -1711,19 +1738,20 @@
   W.setChabadLevel(S.chabadLevel);
   for (const id of TARGET_IDS) if (S.mission.targets[id] === 'accepted') W.placeLights[id].visible = true;
   if (S.mission.status === 'complete') spawnExtraWalkers();
-  if (S.mission.status === 'complete' && !S.flags.resultsSeen) pendingResults = true;
+  if (S.mission.status === 'complete' && !S.flags.resultsSeen && CITY !== 'pt') pendingResults = true;
   player.p.group.visible = !drv || !drv.P.hide;
   if (drv) {
     player.x = drv.x;
     player.z = drv.z;
   }
-  M = G.makeMissions({
+  M = (CITY === 'pt' && G.makeMissionsPT ? G.makeMissionsPT : G.makeMissions)({
     get S() { return S; },
     get mode() { return mode; },
     scene, W, A, player, van, npcs, npcById, walkers, camTarget, isTouch, ACT,
     addNPC, toast, addJoy, addCommunity, save, fmtTime, spawnExtraWalkers, showRadioLabel,
     say: (n) => talkTo(n),
     results: queueResults,
+    travel: (c) => travel(c),
     setRadio(i) {
       S.radio = i;
       A.setStation(i);
@@ -1737,7 +1765,7 @@
   // ================= מיני־מפה =================
   // מפה עגולה שמסתובבת עם המצלמה (כמו במשחקי עולם פתוח); המפה הסטטית בקואורדינטות עולם
   const mm = $('minimap'), mmx = mm.getContext('2d'), MM = mm.width;
-  const MEXT = W.mapExtent || 85, MPX = W.drawMap ? 1.2 : 3;
+  const MEXT = W.mapExtent || 85, MPX = W.drawMap ? Math.min(1.2, 4096 / (2 * MEXT)) : 3;
   let MVIEW = 52;
   let mmStatic = null, mmScale = 1;
   function buildMinimapStatic() {
@@ -1912,11 +1940,12 @@
     if (n.evIcon !== undefined) return n.evIcon;
     const m = S.mission;
     if (n.id === 'moshe') {
+      if (CITY === 'pt') return M.mosheIcon();
       if (m.status === 'idle') return 'mission';
       if (m.status === 'active') return 'hint';
       return S.chabadLevel < 2 ? 'star' : M.mosheIcon();
     }
-    if (m.status !== 'active') return M.iconFor(n);
+    if (m.status !== 'active' || CITY === 'pt') return M.iconFor(n);
     const o = m.targets[n.id];
     if (o === 'accepted') return 'ok';
     if (o === 'declined') return null;
@@ -1925,6 +1954,7 @@
     return 'alert';
   }
   function trackerHTML() {
+    if (CITY === 'pt') return M.trackerHTML();
     const m = S.mission;
     let h = '<div class="tr-title">משימה 1 · ״רק חמש דקות״</div>';
     if (m.status === 'idle') return h + '<div class="tr-obj">דברו עם <b>משה</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
@@ -2060,7 +2090,43 @@
       if (k) n.icon.position.y = 3 + Math.sin(t * 3 + n.x) * 0.12;
     }
   }
+  // בעיר גדולה: הולך רגל שנשאר רחוק עובר למדרכה קרובה לשחקן (מחוץ לטווח הראייה)
+  let walkerMoveT = 0, pathGrid = null;
+  // אינדקס מדרכות לפי משבצות של 200 מטר
+  function pathsNear(x, z) {
+    if (!pathGrid) {
+      pathGrid = new Map();
+      for (const p of W.paths) {
+        const m = p.pts[(p.pts.length / 2) | 0], k = Math.floor(m[0] / 200) + ',' + Math.floor(m[1] / 200);
+        if (!pathGrid.has(k)) pathGrid.set(k, []);
+        pathGrid.get(k).push(p);
+      }
+    }
+    const out = [], cx = Math.floor(x / 200), cz = Math.floor(z / 200);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) out.push(...(pathGrid.get(cx + i + ',' + (cz + j)) || []));
+    return out;
+  }
+  function relocateWalkers(dt) {
+    if (!W.paths || !W.paths.length || (walkerMoveT -= dt) > 0) return;
+    walkerMoveT = 2;
+    for (const w of walkers) {
+      if (!w.path || Math.hypot(player.x - w.x, player.z - w.z) < 320) continue;
+      const cand = pathsNear(player.x, player.z);
+      for (let k = 0; k < 30 && cand.length; k++) {
+        const cp = cand[(Math.random() * cand.length) | 0];
+        const m = cp.pts[(cp.pts.length / 2) | 0], d = Math.hypot(m[0] - player.x, m[1] - player.z);
+        if (d < 70 || d > 260) continue;
+        w.path = mkPath(cp.pts, false);
+        w.s = Math.random() * w.path.len * 2;
+        const [x, z] = pathPoint(w.path, w.s);
+        w.x = x;
+        w.z = z;
+        break;
+      }
+    }
+  }
   function updateWalkers(dt) {
+    if (W.HALF > 1000) relocateWalkers(dt);
     for (const w of walkers) {
       if (dt > 0) {
         const near = !drv && Math.hypot(player.x - w.x, player.z - w.z) < 1.2;
@@ -2172,10 +2238,10 @@
   let call = null, callWait = 0;
   const MOSHE_PHONE = { id: 'moshe', name: 'משה', role: 'בטלפון 📞' };
   function callReason() {
-    if (S.mission.status !== 'complete' || M.activeQuest()) return null;
+    if ((S.mission.status !== 'complete' && CITY !== 'pt') || M.activeQuest()) return null;
     const off = M.callOffer && M.callOffer();
     if (off && !S.flags['call_' + off.id]) return off;
-    if (S.chabadLevel === 1 && !S.flags.call_up) return { id: 'up' };
+    if (CITY !== 'pt' && S.chabadLevel === 1 && !S.flags.call_up) return { id: 'up' };
     return null;
   }
   function updateCall(dt) {
@@ -2196,6 +2262,7 @@
       callWait = 0;
       S.flags['call_' + off.id] = true;
       call = { off, t: 0, ring: 0 };
+      $('call').querySelector('.call-who b').textContent = (M.caller || MOSHE_PHONE).name;
       show($('call'), true);
       save();
     }
@@ -2206,7 +2273,7 @@
     call = null;
     show($('call'), false);
     if (!answer) {
-      toast('📞 שיחה שלא נענתה ממשה — אפשר לדבר איתו ליד בית חב״ד');
+      toast('📞 שיחה שלא נענתה מ' + (M.caller || MOSHE_PHONE).name + ' — אפשר לדבר איתו ליד בית חב״ד');
       return;
     }
     let nodes;
@@ -2217,11 +2284,39 @@
       };
     } else {
       nodes = Object.assign({}, off.nodes);
-      nodes.a = Object.assign({}, nodes.a, { t: 'שליח! מדבר משה. ' + nodes.a.t });
+      nodes.a = Object.assign({}, nodes.a, { t: (M.callerIntro || 'שליח! מדבר משה. ') + nodes.a.t });
     }
     if (drv) drv.v *= 0.3;
-    talkTo({ phone: true, id: 'moshe', def: MOSHE_PHONE, x: player.x, z: player.z, nodes });
+    talkTo({ phone: true, id: 'moshe', def: M.caller || MOSHE_PHONE, x: player.x, z: player.z, nodes });
   }
+
+  // ================= נסיעה בין ערים =================
+  const CITY_NAMES = { hod: 'הוד השרון', pt: 'פתח תקווה' };
+  function travel(to) {
+    if (to === CITY) return;
+    if (drv && drv.auto) return;
+    save();
+    S.cities[CITY] = { player: S.player, van: S.van, rides: S.rides };
+    S.flags.ptUnlocked = true;
+    S.flags.justTraveled = to;
+    S.city = to;
+    S.inVan = false;
+    S.ride = null;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(S));
+    } catch (e) {}
+    resetting = true;
+    mode = 'travel';
+    $('travel-to').textContent = CITY_NAMES[to];
+    show($('travel'), true);
+    A.door && A.door('tank');
+    setTimeout(() => location.replace(location.pathname + location.hash), 1900);
+  }
+  $('p-travel').addEventListener('click', () => {
+    if (M.activeQuest()) return toast('קודם לסיים את המשימה שבאמצע');
+    show($('pause'), false);
+    travel(CITY === 'pt' ? 'hod' : 'pt');
+  });
   $('call-yes').addEventListener('click', () => endCall(true));
   $('call-no').addEventListener('click', () => endCall(false));
 
@@ -2386,6 +2481,8 @@
       van.m.glowMat.opacity = night * 0.7;
       if (post) post.mat.uniforms.night.value = night;
     }
+    W.fx = player.x;
+    W.fz = player.z;
     W.update(clock);
     updateNightLights(Math.max(0, lastNight));
     const ang = G.clamp((h - 6) / 12, 0, 1) * Math.PI;
