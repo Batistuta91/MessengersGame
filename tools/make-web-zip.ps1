@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'index.html') -Destination $stage
 foreach ($d in @('css', 'js', 'lib', 'assets')) { Copy-Item -LiteralPath (Join-Path $root $d) -Destination $stage -Recurse }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'data') | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'data\city.js') -Destination (Join-Path $stage 'data')
+foreach ($c in @('city.js', 'city-pt.js')) { Copy-Item -LiteralPath (Join-Path $root ('data\' + $c)) -Destination (Join-Path $stage 'data') }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'music') | Out-Null
 # רק שירים מהתיקייה music עצמה — לא מ-music\local
 $exts = @('.mp3', '.m4a', '.ogg', '.wav', '.aac', '.webm')
@@ -19,6 +19,9 @@ $songs = @()
 if (-not $NoMusic) {
   $songs = @(Get-ChildItem -LiteralPath (Join-Path $root 'music') -File | Where-Object { $exts -contains $_.Extension.ToLower() } | Sort-Object Name)
   foreach ($s in $songs) { Copy-Item -LiteralPath $s.FullName -Destination (Join-Path $stage 'music') }
+  # השיר של הניידת של ברסלב (לא ברדיו)
+  $bres = Join-Path $root 'music\breslev'
+  if (Test-Path $bres) { Copy-Item -LiteralPath $bres -Destination (Join-Path $stage 'music') -Recurse }
 }
 $items = $songs | ForEach-Object { '  "' + ($_.Name -replace '\\', '\\\\' -replace '"', '\"') + '"' }
 [IO.File]::WriteAllText((Join-Path $stage 'music\playlist.js'), "window.RADIO_SONGS = [`n" + ($items -join ",`n") + "`n];`n", (New-Object Text.UTF8Encoding $false))
