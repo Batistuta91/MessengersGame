@@ -21,6 +21,7 @@
     ev_yaakov: { g: 'm', pitch: 0.82, rate: 0.95 },
     ev_haim: { g: 'm', pitch: 0.95, rate: 1.02 },
     ev_levi: { g: 'm', pitch: 1.0, rate: 1.0 },
+    ev_nachman: { g: 'm', pitch: 1.12, rate: 1.15 },
     player: { g: 'm', pitch: 1.0, rate: 1.08 },
     narr: { g: 'f', pitch: 1.0, rate: 1.0 },
   };

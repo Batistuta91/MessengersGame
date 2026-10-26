@@ -360,6 +360,150 @@
     g.add(glow);
     return { group: g, body, wheels, glowMat, lightMat, roofY: Y1 + 0.05 };
   };
+  // הניידת של ברסלב: ואן לבן, רמקול ענק על גגון עץ, שלט צהוב ״נ נח נחמ נחמן מאומן״
+  G.makeBreslevVan = function () {
+    const g = new T.Group(), body = new T.Group();
+    g.add(body);
+    const FONT = '"Rubik", "Arial Hebrew", Arial, sans-serif';
+    const NA = 'נ נח נחמ נחמן מאומן';
+    const lam = (o) => new T.MeshLambertMaterial(o);
+    const side = (flip) => G.canvasTex(512, 200, (c, w, h) => {
+      c.fillStyle = '#f7f7f2';
+      c.fillRect(0, 0, w, h);
+      // חלונות (בצד הקדמי של הוואן)
+      c.fillStyle = '#26303b';
+      const wx = flip ? w * 0.7 : w * 0.06;
+      c.fillRect(wx, h * 0.08, w * 0.24, h * 0.3);
+      c.font = '900 50px ' + FONT;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.direction = 'rtl';
+      c.fillStyle = '#111';
+      c.fillText(NA, w * 0.5, h * 0.62);
+      c.fillStyle = '#c9a227';
+      c.font = '700 20px ' + FONT;
+      c.fillText('שמחה גדולה להיות תמיד בשמחה', w * 0.5, h * 0.86);
+    }, false, true);
+    const rearTex = G.canvasTex(256, 220, (c, w, h) => {
+      c.fillStyle = '#f7f7f2';
+      c.fillRect(0, 0, w, h);
+      c.fillStyle = '#1d232b';
+      c.fillRect(w * 0.06, h * 0.06, w * 0.41, h * 0.45);
+      c.fillRect(w * 0.53, h * 0.06, w * 0.41, h * 0.45);
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.direction = 'rtl';
+      c.fillStyle = '#ffd200';
+      c.font = '900 20px ' + FONT;
+      c.fillText('נ נח נחמ', w * 0.735, h * 0.2);
+      c.fillText('נחמן מאומן', w * 0.735, h * 0.34);
+      c.fillStyle = '#e03b2f';
+      c.fillText('נ נח נחמ', w * 0.265, h * 0.2);
+      c.fillText('נחמן מאומן', w * 0.265, h * 0.34);
+      // פסים אדום-צהוב בתחתית
+      for (let i = 0; i < 12; i++) {
+        c.fillStyle = i % 2 ? '#ffd200' : '#d62828';
+        c.beginPath();
+        c.moveTo(i * 24, h);
+        c.lineTo(i * 24 + 24, h);
+        c.lineTo(i * 24 + 44, h * 0.88);
+        c.lineTo(i * 24 + 20, h * 0.88);
+        c.fill();
+      }
+      c.fillStyle = '#ffd200';
+      c.fillRect(w * 0.36, h * 0.62, w * 0.28, h * 0.1);
+      c.fillStyle = '#111';
+      c.font = 'bold 16px Arial';
+      c.fillText('69-024-50', w * 0.5, h * 0.675);
+    }, false, true);
+    const W = 2.1, L = 5.4, Y0 = 0.5, Y1 = 2.55;
+    const white = lam({ color: 0xf7f7f2 });
+    // גוף + מכסה מנוע נמוך
+    const main = new T.Mesh(new T.BoxGeometry(W, Y1 - Y0, L - 1.0), white);
+    main.position.set(0, (Y0 + Y1) / 2, -0.5);
+    const hood = new T.Mesh(new T.BoxGeometry(W, 0.85, 1.0), white);
+    hood.position.set(0, Y0 + 0.42, L / 2 - 0.5);
+    const glassMat = lam({ color: 0x26303b });
+    const ws = new T.Mesh(new T.PlaneGeometry(W - 0.2, 0.95), glassMat);
+    ws.position.set(0, Y0 + 1.35, L / 2 - 0.98);
+    ws.rotation.x = -0.35;
+    const wsBlock = new T.Mesh(new T.BoxGeometry(W, 1.15, 0.5), white);
+    wsBlock.position.set(0, Y0 + 1.42, L / 2 - 1.25);
+    for (const m of [main, hood, wsBlock]) m.castShadow = m.receiveShadow = true;
+    body.add(main, hood, wsBlock, ws);
+    const pR = new T.Mesh(new T.PlaneGeometry(L - 1.02, Y1 - Y0 - 0.02), lam({ map: side(false) }));
+    pR.position.set(W / 2 + 0.01, (Y0 + Y1) / 2, -0.5);
+    pR.rotation.y = Math.PI / 2;
+    const pL = new T.Mesh(new T.PlaneGeometry(L - 1.02, Y1 - Y0 - 0.02), lam({ map: side(true) }));
+    pL.position.set(-W / 2 - 0.01, (Y0 + Y1) / 2, -0.5);
+    pL.rotation.y = -Math.PI / 2;
+    const pB = new T.Mesh(new T.PlaneGeometry(W - 0.02, Y1 - Y0 - 0.02), lam({ map: rearTex }));
+    pB.position.set(0, (Y0 + Y1) / 2, -0.5 - (L - 1.0) / 2 - 0.01);
+    pB.rotation.y = Math.PI;
+    body.add(pR, pL, pB);
+    // פנסים, פגושים, גריל
+    const lightMat = new T.MeshBasicMaterial({ color: 0xfff1c4 });
+    box(body, 0.36, 0.2, 0.05, lightMat, -0.72, Y0 + 0.55, L / 2 + 0.01);
+    box(body, 0.36, 0.2, 0.05, lightMat, 0.72, Y0 + 0.55, L / 2 + 0.01);
+    box(body, 0.9, 0.3, 0.05, 0x9a9a9a, 0, Y0 + 0.55, L / 2 + 0.01);
+    box(body, W + 0.06, 0.2, 0.16, 0x8a8a8a, 0, Y0 + 0.1, L / 2 + 0.05);
+    box(body, W + 0.06, 0.2, 0.16, 0x8a8a8a, 0, Y0 + 0.1, -L / 2 - 0.05);
+    const tail = new T.MeshBasicMaterial({ color: 0xd62828 });
+    box(body, 0.22, 0.5, 0.06, tail, -0.95, Y0 + 0.75, -L / 2 - 0.02);
+    box(body, 0.22, 0.5, 0.06, tail, 0.95, Y0 + 0.75, -L / 2 - 0.02);
+    for (const sd of [1, -1]) {
+      box(body, 0.08, 0.32, 0.22, 0x1a1a1a, sd * (W / 2 + 0.16), Y0 + 1.3, L / 2 - 1.1);
+      const dw = new T.Mesh(new T.PlaneGeometry(0.75, 0.55), glassMat);
+      dw.position.set(sd * (W / 2 + 0.015), Y0 + 1.45, L / 2 - 1.35);
+      dw.rotation.y = (sd * Math.PI) / 2;
+      body.add(dw);
+    }
+    // סולם מאחור
+    for (const x of [-0.45, -0.15]) box(body, 0.05, 1.9, 0.05, 0xbfbfbf, x, Y0 + 1.0, -L / 2 - 0.12);
+    for (let i = 0; i < 6; i++) box(body, 0.32, 0.04, 0.04, 0xbfbfbf, -0.3, Y0 + 0.2 + i * 0.32, -L / 2 - 0.12);
+    // גגון עץ, מעקה, רמקול ענק ושלט צהוב
+    box(body, W - 0.1, 0.1, L - 1.6, 0x8b5a2b, 0, Y1 + 0.22, -0.7);
+    for (const x of [-0.9, 0.9]) for (const z of [-2.6, -0.7, 1.2]) box(body, 0.06, 0.24, 0.06, 0xbfbfbf, x, Y1 + 0.1, z);
+    for (const x of [-0.98, 0.98]) box(body, 0.05, 0.05, L - 1.6, 0xbfbfbf, x, Y1 + 0.5, -0.7);
+    const spk = box(body, 1.05, 0.95, 0.75, 0xdedbd2, 0, Y1 + 0.75, -2.3);
+    const cone = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.06, 16), lam({ color: 0x2b2b2b }));
+    cone.rotation.x = Math.PI / 2;
+    cone.position.set(0.1, Y1 + 0.72, -2.3 - 0.39);
+    const dust = new T.Mesh(new T.CylinderGeometry(0.08, 0.08, 0.07, 10), lam({ color: 0x3b5bdb }));
+    dust.rotation.x = Math.PI / 2;
+    dust.position.set(0.1, Y1 + 0.72, -2.3 - 0.41);
+    body.add(cone, dust);
+    const signTex = G.canvasTex(512, 64, (c, w, h) => {
+      c.fillStyle = '#ffd200';
+      c.fillRect(0, 0, w, h);
+      c.strokeStyle = '#c9a227';
+      c.lineWidth = 4;
+      c.strokeRect(2, 2, w - 4, h - 4);
+      c.fillStyle = '#111';
+      c.font = '900 40px ' + FONT;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.direction = 'rtl';
+      c.fillText(NA, w / 2, h / 2 + 2);
+    }, false, true);
+    const signMat = lam({ map: signTex, side: T.DoubleSide });
+    const sign = new T.Mesh(new T.PlaneGeometry(3.4, 0.5), signMat);
+    sign.position.set(0, Y1 + 0.62, 0.0);
+    sign.rotation.y = Math.PI / 2;
+    body.add(sign);
+    box(body, 0.04, 0.56, 3.45, 0xc9a227, 0, Y1 + 0.62, 0.0);
+    const wheels = [];
+    const wGeo = new T.CylinderGeometry(0.4, 0.4, 0.3, 12);
+    for (const [x, z] of [[-0.95, 1.75], [0.95, 1.75], [-0.95, -1.75], [0.95, -1.75]]) {
+      const w = new T.Mesh(wGeo, lmat(0x1e1e1e));
+      w.rotation.z = Math.PI / 2;
+      w.position.set(x, 0.4, z);
+      w.castShadow = true;
+      g.add(w);
+      wheels.push(w);
+    }
+    return { group: g, body, wheels, lightMat, speaker: spk };
+  };
   // קטנוע (קורקינט ממונע עירוני)
   G.makeScooter = function (color) {
     const g = new T.Group(), body = new T.Group();

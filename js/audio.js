@@ -188,10 +188,29 @@
     }
   };
   // נקרא בכל פריים: עמעום חלק של עוצמת השיר
-  // הנמכת השירים (דיבור / שיחת טלפון): 1 רגיל, 0 שקט
+  // השיר של הניידת של ברסלב — מתנגן רק מהרמקול שלהם (לא ברדיו של שאר הרכבים)
+  let bresEl = null, bresVol = 0, bresTarget = 0;
+  A.bresFailed = false;
+  A.breslev = function (v) {
+    bresTarget = v;
+    if (v > 0 && !bresEl && !A.bresFailed) {
+      bresEl = new Audio('music/breslev/' + encodeURIComponent('נח נחמן מאומן.mp3'));
+      bresEl.loop = true;
+      bresEl.volume = 0;
+      bresEl.addEventListener('error', () => (A.bresFailed = true));
+    }
+    if (bresEl && v > 0 && bresEl.paused) bresEl.play().catch(() => {});
+  };
+  function bresTick(dt) {
+    if (!bresEl) return;
+    bresVol += (bresTarget - bresVol) * Math.min(1, dt * 3);
+    bresEl.volume = enabled ? Math.max(0, Math.min(1, bresVol * 0.9 * duckV)) : 0;
+    if (bresTarget <= 0 && bresVol < 0.01 && !bresEl.paused) bresEl.pause();
+  }  // הנמכת השירים (דיבור / שיחת טלפון): 1 רגיל, 0 שקט
   let duck = 1, duckV = 1;
   A.setDuck = (d) => (duck = d);
   A.kolTick = function (dt) {
+    bresTick(dt);
     if (!songEl) return;
     kolVol = kolTarget > kolVol ? Math.min(kolTarget, kolVol + dt * 1.5) : Math.max(kolTarget, kolVol - dt * 1.2);
     duckV += (duck - duckV) * Math.min(1, dt * 6);

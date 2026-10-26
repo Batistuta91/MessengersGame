@@ -234,6 +234,7 @@
     tank: { name: 'טנק המבצעים', enter: 'כניסה לטנק המבצעים', max: W.city ? 25 : 21, acc: 13, grip: 1, offs: [-2.1, -0.7, 0.7, 2.1], r: 1.15, len: 6, cam: 10, camH: 2.5, icon: '🚐', hide: true, wheelR: 0.46, pitch: 1 },
     car: { name: 'המכונית של משה', enter: 'לנהוג במכונית של משה', max: 32, acc: 17, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.7, icon: '🚗', hide: true, wheelR: 0.33, pitch: 1.4 },
     scooter: { name: 'קטנוע', enter: 'לעלות על הקטנוע', max: 24, acc: 16, grip: 1.45, offs: [0], r: 0.6, len: 1.6, cam: 4.8, camH: 1.7, icon: '🛵', hide: false, seat: 0.84, wheelR: 0.24, pitch: 2.2 },
+    breslev: { name: 'הניידת של ברסלב', enter: 'לעלות לניידת של ברסלב', max: 15, acc: 8, grip: 1, offs: [-1.8, 0, 1.8], r: 1.05, len: 5.4, cam: 10, camH: 2.8, icon: '🚐', hide: true, wheelR: 0.4, pitch: 0.9 },
     bike: { name: 'אופניים', enter: 'לעלות על האופניים', max: 11, acc: 6, grip: 1.6, offs: [0], r: 0.55, len: 1.5, cam: 4.4, camH: 1.6, icon: '🚲', hide: false, seat: 0.9, wheelR: 0.33, pitch: 0 },
   };
   const RIDE_COLS = { scooter: [0xd62828, 0x1b6fd8, 0x2e9d5f, 0xf39c12], bike: [0x2c3e50, 0xc0392b, 0x16a085], car: [0x6b8fb8] };
@@ -241,11 +242,16 @@
   function addVehicle(id, type, x, z, h) {
     const cols = RIDE_COLS[type] || [0xffffff];
     const c = cols[vehicles.length % cols.length];
-    const m = type === 'tank' ? G.makeVan() : type === 'car' ? G.makeDriveCar(c) : type === 'scooter' ? G.makeScooter(c) : G.makeBike(c);
+    const m = type === 'breslev' ? G.makeBreslevVan() : type === 'tank' ? G.makeVan() : type === 'car' ? G.makeDriveCar(c) : type === 'scooter' ? G.makeScooter(c) : G.makeBike(c);
     scene.add(m.group);
     const v = { id, type, P: VT[type], x, z, h, v: 0, lean: 0, hornCd: 0, steer: 0, m };
     vehicles.push(v);
     return v;
+  }
+  function removeVehicle(v) {
+    const i = vehicles.indexOf(v);
+    if (i >= 0) vehicles.splice(i, 1);
+    scene.remove(v.m.group);
   }
   const van = addVehicle('tank', 'tank', S.van.x, S.van.z, S.van.h);
   for (const r of SPOT.rides || []) {
@@ -817,6 +823,13 @@
       else steer = G.clamp(G.wrapAngle(desired - v.h) * 2.2, -1, 1);
       if (!touch.gas && !touch.brake) throttle = 0.65 * joy.mag;
     }
+    // נהג אוטומטי (למשל הניידת של ברסלב): השחקן נוסע כנוסע
+    if (v.auto) {
+      const c = v.auto(dt, v);
+      throttle = c.throttle;
+      steer = c.steer;
+      brake = !!c.brake;
+    }
     const mods = M ? M.driveMods(v) : { max: 1, grip: 1 };
     const MAX = P.max * mods.max, REV = v.type === 'bike' ? -3 : -7, ACC = P.acc;
     if (brake) v.v = G.moveToward(v.v, 0, 34 * dt);
@@ -996,6 +1009,10 @@
       toast('באופניים אין רדיו 🚲 — רק הפעמון (H)');
       return;
     }
+    if (drv.type === 'breslev') {
+      toast('בניידת של ברסלב יש רק שיר אחד — נח נחמן מאומן! 🎶');
+      return;
+    }
     const cycle = (A.hasSongs() ? [A.KOL] : []).concat([1, 2, 3, 0]);
     const i = cycle.indexOf(S.radio);
     S.radio = cycle[(i + 1) % cycle.length];
@@ -1045,6 +1062,7 @@
       }
     }
     for (const v of vehicles) {
+      if (v.locked) continue;
       const dv = Math.hypot(player.x - v.x, player.z - v.z) - v.P.len / 3.5;
       if (dv < 2.2 && dv < best) {
         best = dv;
@@ -1067,6 +1085,10 @@
   }
   const GREETS = ['בוקר טוב!', 'שבוע טוב, רבי!', 'איזה יום יפה היום', 'אה, השליח החדש! ברוך הבא לשכונה', 'תמסור ד״ש למשה!', 'ראיתי את הטנק שלך — אחלה ניגונים', 'שיהיה לך יום מוצלח!', 'שבת שלום מראש!'];
   function interact() {
+    if (drv && drv.auto) {
+      toast(drv.autoMsg || 'נוסעים! יורדים בעצירה הבאה');
+      return;
+    }
     if (drv) {
       if (Math.abs(drv.v) >= 2.5) toast('האטו כדי לרדת');
       else if (cur && cur.kind === 'quest') cur.run();
@@ -1708,7 +1730,7 @@
     },
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
-  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch }) : null;
+  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t) }) : null;
   resize();
 
   // ================= מיני־מפה =================
@@ -2250,7 +2272,7 @@
     updateBounds(dt);
     updateCall(dt);
     // רדיו: נשמע מהרמקול שעל הגג, חלש יותר ככל שמתרחקים
-    const vol = S.radio ? (S.inVan ? 1 : G.clamp(1 - Math.hypot(player.x - van.x, player.z - van.z) / 30, 0, 1) * 0.8) : 0;
+    const vol = S.radio ? (drv ? 1 : G.clamp(1 - Math.hypot(player.x - van.x, player.z - van.z) / 30, 0, 1) * 0.8) : 0;
     // בשיחת טלפון הרדיו שותק; כשמישהו מדבר — הוא נחלש
     const onPhone = !!call || (dlg && dlg.npc.phone);
     const duck = onPhone ? 0 : G.voice && G.voice.speaking ? 0.3 : 1;
@@ -2258,6 +2280,7 @@
     A.setDuck(duck);
     A.setEngine(!!drv && drv.type !== 'bike', drv ? Math.abs(drv.v) / drv.P.max : 0, drv ? drv.P.pitch : 1);
     if (S.radio && vol > 0.05 && (S.radio !== A.KOL || drv === van)) {
+      const src = drv || van;
       noteT -= dt;
       if (noteT <= 0) {
         noteT = 0.55;
@@ -2265,7 +2288,7 @@
         if (nt) {
           nt.life = 1.6;
           nt.vx = (Math.random() - 0.5) * 1.2;
-          nt.s.position.set(van.x, 2.9, van.z);
+          nt.s.position.set(src.x, 3.4, src.z);
           nt.s.visible = true;
         }
       }
