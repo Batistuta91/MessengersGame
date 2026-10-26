@@ -231,7 +231,7 @@
   scene.add(player.p.group);
   // ---------- כלי רכב: הטנק, מכונית, קטנוע ואופניים ----------
   const VT = {
-    tank: { name: 'טנק המבצעים', enter: 'כניסה לטנק המבצעים', max: W.city ? 25 : 21, acc: 13, grip: 1, offs: [-1.5, 0, 1.5], r: 1.05, len: 4.6, cam: 8.5, camH: 2.0, icon: '🚐', hide: true, wheelR: 0.42, pitch: 1 },
+    tank: { name: 'טנק המבצעים', enter: 'כניסה לטנק המבצעים', max: W.city ? 25 : 21, acc: 13, grip: 1, offs: [-2.1, -0.7, 0.7, 2.1], r: 1.15, len: 6, cam: 10, camH: 2.5, icon: '🚐', hide: true, wheelR: 0.46, pitch: 1 },
     car: { name: 'המכונית של משה', enter: 'לנהוג במכונית של משה', max: 32, acc: 17, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.7, icon: '🚗', hide: true, wheelR: 0.33, pitch: 1.4 },
     scooter: { name: 'קטנוע', enter: 'לעלות על הקטנוע', max: 24, acc: 16, grip: 1.45, offs: [0], r: 0.6, len: 1.6, cam: 4.8, camH: 1.7, icon: '🛵', hide: false, seat: 0.84, wheelR: 0.24, pitch: 2.2 },
     bike: { name: 'אופניים', enter: 'לעלות על האופניים', max: 11, acc: 6, grip: 1.6, offs: [0], r: 0.55, len: 1.5, cam: 4.4, camH: 1.6, icon: '🚲', hide: false, seat: 0.9, wheelR: 0.33, pitch: 0 },

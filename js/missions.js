@@ -127,7 +127,7 @@
 
     // מטען על גג הטנק
     const cargoGroup = new T.Group();
-    cargoGroup.position.y = 2.3;
+    cargoGroup.position.y = van.m.roofY || 2.3;
     van.m.body.add(cargoGroup);
     const CARGO_LOOK = {
       challah: [0.7, 0.3, 0.5, 0xc98a3a], candles: [0.4, 0.4, 0.4, 0xffffff], juice: [0.5, 0.5, 0.4, 0x7b1e3a], cholent: [0.9, 0.6, 0.9, 0x555555],
