@@ -360,12 +360,22 @@
         acc += L;
       }
     }
-    function ribbonMesh(buf, mat) {
+    // שכבות קרקע (שטחים, מדרכות, כבישים): בלי כתיבת עומק ובסדר ציור קבוע —
+    // כך משטחים חופפים לא ״מרצדים״ אחד על השני (z-fighting), גם מרחוק
+    W.decal = function (mat, layer) {
+      mat.depthWrite = false;
+      mat.polygonOffset = true;
+      mat.polygonOffsetFactor = -2;
+      mat.polygonOffsetUnits = -4;
+      return mat;
+    };
+    function ribbonMesh(buf, mat, layer) {
       const g = new T.BufferGeometry();
       g.setAttribute('position', new T.Float32BufferAttribute(buf.pos, 3));
       g.setAttribute('uv', new T.Float32BufferAttribute(buf.uv, 2));
       g.computeVertexNormals();
-      const m = new T.Mesh(g, mat);
+      const m = new T.Mesh(g, layer ? W.decal(mat) : mat);
+      if (layer) m.renderOrder = layer;
       m.receiveShadow = true;
       scene.add(m);
       return m;
@@ -382,10 +392,10 @@
         if (r.name === 'הבנים') ribbon(bufFlood, r.pts, r.w + 1, 0.06, 1, 4, 0);
       }
     }
-    ribbonMesh(bufWalk, lam(0xffffff, { map: texCurb }));
-    ribbonMesh(bufPath, lam(0xffffff, { map: texPave }));
-    ribbonMesh(bufMinor, lam(0xffffff, { map: texMinor, polygonOffset: true, polygonOffsetFactor: -1 }));
-    ribbonMesh(bufMajor, lam(0xffffff, { map: texMajor, polygonOffset: true, polygonOffsetFactor: -2 }));
+    ribbonMesh(bufWalk, lam(0xffffff, { map: texCurb }), 2);
+    ribbonMesh(bufPath, lam(0xffffff, { map: texPave }), 2.1);
+    ribbonMesh(bufMinor, lam(0xffffff, { map: texMinor }), 3);
+    ribbonMesh(bufMajor, lam(0xffffff, { map: texMajor }), 4);
     W.floodMesh = ribbonMesh(bufFlood, new T.MeshBasicMaterial({ color: 0x4f86c6, transparent: true, opacity: 0, depthWrite: false }));
     W.floodMesh.visible = false;
     W.isFlooded = (x, z) => {
@@ -438,7 +448,8 @@
       g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
       g.computeVertexNormals();
       const tex = G.canvasTex(32, 32, grassDraw(b.col, 200), true);
-      const m = new T.Mesh(g, lam(0xffffff, { map: tex, polygonOffset: true, polygonOffsetFactor: -0.5 }));
+      const m = new T.Mesh(g, W.decal(lam(0xffffff, { map: tex })));
+      m.renderOrder = 1 + b.y * 10;
       m.receiveShadow = true;
       scene.add(m);
     }

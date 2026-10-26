@@ -909,7 +909,12 @@
     player.p.group.visible = !v.P.hide;
     tp.yaw = v.h;
     A.door(v.type);
-    if (A.hasSongs()) {
+    if (v.type === 'bike') {
+      // באופניים אין רדיו
+      S.radio = 0;
+      A.setStation(0);
+      A.kol(false);
+    } else if (A.hasSongs()) {
       S.radio = A.KOL;
       A.setStation(A.KOL);
       setTimeout(kolCard, 150);
@@ -985,6 +990,10 @@
   function radio() {
     if (!drv) {
       toast('הרדיו עובד כשנוסעים — עלו על כלי רכב');
+      return;
+    }
+    if (drv.type === 'bike') {
+      toast('באופניים אין רדיו 🚲 — רק הפעמון (H)');
       return;
     }
     const cycle = (A.hasSongs() ? [A.KOL] : []).concat([1, 2, 3, 0]);
@@ -1130,7 +1139,7 @@
       const id = pending[0];
       return {
         a: { s: 'npc', t: id ? HINTS[id] : 'כמעט סיימת!', go: 'b' },
-        b: { s: 'npc', t: 'נשארו לך ' + fmtTime(m.timeLeft) + ' דקות. אתה עושה עבודה טובה — תמשיך!' },
+        b: { s: 'npc', t: 'נשארו ' + fmtTime(m.timeLeft) + ' דקות עד השקיעה. אתה עושה עבודה טובה — תמשיך!' },
       };
     }
     if (S.chabadLevel < 2) return { a: { s: 'npc', t: 'איזה בוקר! ראית איך השכונה מגיבה? היכנס לבית חב״ד — הדלת ממש מאחוריי — ונשדרג את המקום. מגיע לנו מטבח אמיתי, ואז נמשיך למשימה הבאה.' } };
@@ -1353,6 +1362,12 @@
     m.status = 'active';
     m.timeLeft = 300;
     m.elapsed = 0;
+    // מבצע תפילין רק באור יום: אם כבר מאוחר — מתחילים בבוקר חדש, והמשימה נגמרת בשקיעה
+    if (S.time < 7 || S.time > 12) {
+      S.time = 8;
+      setTimeout(() => toast('☀ בוקר חדש בהוד השרון — יש זמן עד השקיעה'), 1500);
+    }
+    m.t0 = S.time;
     A.success();
     toast('המשימה התחילה: ״רק חמש דקות״!', 'gold');
     save();
@@ -1449,7 +1464,7 @@
     const met = acc + dec + later;
     const stars = acc >= 5 ? 3 : acc >= 3 ? 2 : 1;
     $('res-stars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    $('res-title').textContent = m.endReason === 'time' ? 'הזמן נגמר — אבל השכונה כבר מרגישה אחרת' : 'המשימה הושלמה!';
+    $('res-title').textContent = m.endReason === 'time' ? 'השמש שקעה — אבל השכונה כבר מרגישה אחרת' : 'המשימה הושלמה!';
     const rows = [
       ['פגשתם', met + ' מתוך 5'],
       ['הניחו תפילין', acc],
@@ -2206,8 +2221,14 @@
       $('bounds-arrow').style.transform = 'rotate(' + (-90 - (rel * 180) / Math.PI).toFixed(0) + 'deg)';
     }
   }
+  const SUNSET = 18.3;
   function updatePlay(dt, t) {
     S.time = (S.time + (dt * M.timeRate()) / 60) % 24;
+    // במשימת התפילין השעון צמוד לטיימר: הוא מגיע לשקיעה בדיוק כשהזמן נגמר
+    if (S.mission.status === 'active') {
+      const t0 = S.mission.t0 || 8;
+      S.time = t0 + (SUNSET - t0) * G.clamp(S.mission.elapsed / 300, 0, 1);
+    }
     M.update(dt);
     if (drv) updateVehicle(drv, dt);
     else updatePlayer(dt);
@@ -2221,7 +2242,7 @@
       m.elapsed += dt;
       if (m.timeLeft <= 0) {
         m.timeLeft = 0;
-        toast('הזמן נגמר!', 'gold');
+        toast('🌇 השמש שקעה — המשימה הסתיימה', 'gold');
         completeMission('time');
       }
     }
@@ -2230,7 +2251,11 @@
     updateCall(dt);
     // רדיו: נשמע מהרמקול שעל הגג, חלש יותר ככל שמתרחקים
     const vol = S.radio ? (S.inVan ? 1 : G.clamp(1 - Math.hypot(player.x - van.x, player.z - van.z) / 30, 0, 1) * 0.8) : 0;
-    A.setRadioVolume(G.voice && G.voice.speaking ? vol * 0.3 : vol);
+    // בשיחת טלפון הרדיו שותק; כשמישהו מדבר — הוא נחלש
+    const onPhone = !!call || (dlg && dlg.npc.phone);
+    const duck = onPhone ? 0 : G.voice && G.voice.speaking ? 0.3 : 1;
+    A.setRadioVolume(vol * duck);
+    A.setDuck(duck);
     A.setEngine(!!drv && drv.type !== 'bike', drv ? Math.abs(drv.v) / drv.P.max : 0, drv ? drv.P.pitch : 1);
     if (S.radio && vol > 0.05 && (S.radio !== A.KOL || drv === van)) {
       noteT -= dt;
@@ -2564,7 +2589,7 @@
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
       get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; },
-      player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay,
+      player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
   try {

@@ -105,7 +105,8 @@
       zg.setAttribute('position', new T.Float32BufferAttribute(zPos, 3));
       zg.setAttribute('uv', new T.Float32BufferAttribute(zUv, 2));
       zg.computeVertexNormals();
-      const zm = new T.Mesh(zg, new T.MeshLambertMaterial({ map: zebraTex, alphaTest: 0.5, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3 }));
+      const zm = new T.Mesh(zg, new T.MeshLambertMaterial({ map: zebraTex, alphaTest: 0.5, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6, depthWrite: false }));
+      zm.renderOrder = 5;
       zm.receiveShadow = true;
       scene.add(zm);
     }

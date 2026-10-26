@@ -188,10 +188,14 @@
     }
   };
   // נקרא בכל פריים: עמעום חלק של עוצמת השיר
+  // הנמכת השירים (דיבור / שיחת טלפון): 1 רגיל, 0 שקט
+  let duck = 1, duckV = 1;
+  A.setDuck = (d) => (duck = d);
   A.kolTick = function (dt) {
     if (!songEl) return;
     kolVol = kolTarget > kolVol ? Math.min(kolTarget, kolVol + dt * 1.5) : Math.max(kolTarget, kolVol - dt * 1.2);
-    songEl.volume = enabled ? kolVol * 0.85 : 0;
+    duckV += (duck - duckV) * Math.min(1, dt * 6);
+    songEl.volume = enabled ? kolVol * 0.85 * duckV : 0;
     if (kolVol <= 0 && !kolOn && !songEl.paused) songEl.pause();
   };
 
