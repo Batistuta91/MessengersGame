@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#13213f">
+  <title>השליחים: אין פה רגע דל</title>
+  <meta name="description" content="סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה. דמו חינם בדפדפן.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ממשק תוך-משחק -->
+  <div id="hud" class="hidden">
+    <div id="top-left">
+      <button id="pause-btn" class="pill">השהיה</button>
+      <button id="fs-btn" class="pill">מסך מלא</button>
+      <button id="cam-btn" class="pill">מצלמה</button>
+    </div>
+
+    <div id="hud-right">
+      <div class="hud-top">
+        <div class="hud-nums">
+          <div id="clock">07:30</div>
+          <div id="joy-num"><span class="heart">♥</span> <b id="joy-val">0</b></div>
+          <div id="stats"></div>
+        </div>
+        <div id="badge" title="מצב"><span id="badge-ic">🚶</span></div>
+      </div>
+      <div id="tracker"></div>
+    </div>
+
+    <div id="minimap-wrap">
+      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="joy" class="joybar" title="שמחה ושליחות">
+        <span class="heart">♥</span>
+        <div class="bar"><div id="joy-fill"></div></div>
+      </div>
+    </div>
+
+    <div id="street-sign"><b id="st-he"></b><small id="st-en"></small></div>
+    <div id="radio-label"></div>
+    <div id="toasts"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="keys-hint"></div>
+  </div>
+
+  <!-- שליטה במגע -->
+  <div id="touch" class="hidden">
+    <div id="joystick"><div id="knob"></div></div>
+    <div id="tbtns">
+      <button id="t-act" class="tb big">פעולה</button>
+      <button id="t-gas" class="tb van-only">גז</button>
+      <button id="t-brake" class="tb van-only">בלם</button>
+      <button id="t-horn" class="tb van-only">צופר</button>
+      <button id="t-radio" class="tb van-only">רדיו</button>
+      <button id="t-next" class="tb van-only">⏭</button>
+    </div>
+  </div>
+
+  <!-- חלונית שיחה -->
+  <div id="dialog" class="hidden">
+    <div id="d-name"></div>
+    <div id="d-text"></div>
+    <div id="d-choices"></div>
+    <button id="d-next" class="hidden">המשך ◂</button>
+  </div>
+
+  <!-- הנחת תפילין -->
+  <div id="tefillin" class="overlay hidden">
+    <div class="card">
+      <h2 id="tf-title"></h2>
+      <p id="tf-text"></p>
+      <div id="tf-wraps"></div>
+      <button id="tf-btn" class="btn big">כריכה</button>
+      <div id="tf-shema" class="hidden">שְׁמַע יִשְׂרָאֵל ה׳ אֱלֹקֵינוּ ה׳ אֶחָד</div>
+    </div>
+  </div>
+
+  <!-- בית חב״ד -->
+  <div id="panel" class="overlay hidden">
+    <div class="card wide">
+      <h2>בית חב״ד</h2>
+      <div id="panel-body"></div>
+      <div class="btns"><button id="panel-close" class="btn ghost">חזרה לעיר</button></div>
+    </div>
+  </div>
+
+  <!-- תוצאות -->
+  <div id="results" class="overlay hidden">
+    <div class="card">
+      <div id="res-stars" class="stars"></div>
+      <h2 id="res-title"></h2>
+      <p id="res-note" class="res-note hidden"></p>
+      <ul id="res-stats" class="res-stats"></ul>
+      <h3>מה השתנה בעיר</h3>
+      <ul id="res-changes" class="res-changes"></ul>
+      <div class="btns">
+        <button id="res-continue" class="btn big">המשך לחקור את העיר</button>
+        <button id="res-restart" class="btn ghost">התחלה מחדש</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- השהיה -->
+  <div id="pause" class="overlay hidden">
+    <div class="card">
+      <h2>המשחק מושהה</h2>
+      <div class="btns col">
+        <button id="p-resume" class="btn big">המשך</button>
+        <button id="p-sound" class="btn">צליל: פועל</button>
+        <button id="p-shadows" class="btn">גרפיקה: מלאה</button>
+        <button id="p-restart" class="btn danger">התחלה מחדש</button>
+      </div>
+      <table class="controls desk">
+        <tr><td>WASD / חצים</td><td>תנועה ונהיגה</td></tr>
+        <tr><td>Shift</td><td>ריצה</td></tr>
+        <tr><td>E / Enter</td><td>שיחה · כניסה ויציאה מהטנק · דלת · אישור</td></tr>
+        <tr><td>רווח</td><td>בלם ברכב · קפיצה ברגל</td></tr>
+        <tr><td>H</td><td>צופר</td></tr>
+        <tr><td>R</td><td>רדיו: קול חב״ד / ניגונים / כבוי</td></tr>
+        <tr><td>N</td><td>השיר הבא ברדיו</td></tr>
+        <tr><td>1–3 / ↑↓</td><td>בחירת תשובה בשיחה</td></tr>
+        <tr><td>עכבר</td><td>סיבוב המצלמה (לחצו על המסך כדי לנעול)</td></tr>
+        <tr><td>V</td><td>החלפת מצלמה: גוף שלישי / מבט על</td></tr>
+        <tr><td>Esc / P</td><td>השהיה</td></tr>
+      </table>
+      <p class="controls mob">ג׳ויסטיק משמאל לתנועה (עד הסוף = ריצה). בטנק: הג׳ויסטיק מכוון, גז ובלם מימין, צופר וניגון בכפתורים.</p>
+      <p class="saved-note">ההתקדמות נשמרת אוטומטית בדפדפן.</p>
+    </div>
+  </div>
+
+  <!-- אישור -->
+  <div id="confirm" class="overlay hidden">
+    <div class="card small">
+      <h2>להתחיל מחדש?</h2>
+      <p>כל ההתקדמות השמורה תימחק.</p>
+      <div class="btns">
+        <button id="c-yes" class="btn danger">כן, להתחיל מחדש</button>
+        <button id="c-no" class="btn ghost">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- מסך פתיחה -->
+  <div id="title" class="overlay title">
+    <div class="title-card">
+      <div class="badge">דמו · חינם בדפדפן · בלי התקנה</div>
+      <h1>השליחים<span>אין פה רגע דל</span></h1>
+      <p class="tagline">סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה.</p>
+      <div class="title-btns">
+        <button id="btn-play" class="btn big">שחקו בדמו</button>
+        <button id="btn-new" class="btn ghost hidden">משחק חדש</button>
+      </div>
+      <p class="mobile-hint">בטלפון: לחצו ״שחקו בדמו״ וסובבו את המכשיר לרוחב</p>
+      <p class="credit">מרכז הוד השרון · נתוני מפה: © OpenStreetMap contributors (ODbL)</p>
+    </div>
+  </div>
+
+  <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
+
+  <script src="lib/three.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="music/playlist.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/world.js"></script>
+  <script src="data/city.js"></script>
+  <script src="js/city.js"></script>
+  <script src="js/missions.js"></script>
+  <script src="js/traffic.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
