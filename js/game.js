@@ -12,6 +12,11 @@
   // ================= רנדרר וסצנה =================
   const canvas = $('game');
   const renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  // כרטיס המסך איבד את ההקשר (בדרך כלל חוסר זיכרון) — מודיעים במקום מסך שחור
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    window.dispatchEvent(new ErrorEvent('error', { message: 'WebGL context lost (graphics memory) - reload the page (F5)' }));
+  });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -374,7 +379,8 @@
     const a = C[s], b = C[(s + 1) % 4];
     return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
   }
-  const JOG = mkPath(W.jogPath || [[SPOT.playerStart.x, SPOT.playerStart.z], [SPOT.playerStart.x + 20, SPOT.playerStart.z], [SPOT.playerStart.x + 20, SPOT.playerStart.z + 20]], true);
+  const PS0 = SPOT.playerStart || { x: 0, z: 0 };
+  const JOG = mkPath(W.jogPath || [[PS0.x, PS0.z], [PS0.x + 20, PS0.z], [PS0.x + 20, PS0.z + 20]], true);
   const jogPoint = (s) => pathPoint(JOG, s);
 
   // ---------- סמנים בעולם ----------

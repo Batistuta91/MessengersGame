@@ -2,6 +2,17 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
+  <script>
+    // שגיאה בזמן ריצה — מוצגת על המסך, כדי שאפשר יהיה לצלם ולשלוח
+    window.addEventListener('error', function (e) {
+      if (window.__errShown || !e.message) return;
+      window.__errShown = true;
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;background:#b00020;color:#fff;font:13px monospace;padding:8px 12px;border-radius:6px;direction:ltr;text-align:left;white-space:pre-wrap';
+      d.textContent = '\u26a0 ' + e.message + '\n' + (e.filename || '').split('/').pop() + ':' + e.lineno + (e.error && e.error.stack ? '\n' + e.error.stack.split('\n').slice(1, 4).join('\n') : '');
+      (document.body || document.documentElement).appendChild(d);
+    });
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#13213f">
   <title>השליחים: אין פה רגע דל</title>
@@ -10,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20261026c">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -176,14 +187,14 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js"></script>
-  <script src="js/util.js"></script>
-  <script src="music/playlist.js"></script>
+  <script src="lib/three.min.js?v=20261026c"></script>
+  <script src="js/util.js?v=20261026c"></script>
+  <script src="music/playlist.js?v=20261026c"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js" onerror="this.remove()"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/entities.js"></script>
-  <script src="js/world.js"></script>
+  <script src="music/playlist.local.js?v=20261026c" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261026c"></script>
+  <script src="js/entities.js?v=20261026c"></script>
+  <script src="js/world.js?v=20261026c"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -194,15 +205,19 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '"><\/script>');
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261026c"><\/script>');
     })();
   </script>
-  <script src="js/city.js"></script>
-  <script src="js/missions.js"></script>
-  <script src="js/missions-pt.js"></script>
-  <script src="js/traffic.js"></script>
-  <script src="js/events.js"></script>
-  <script src="js/voice.js"></script>
-  <script src="js/game.js"></script>
+  <script>
+    // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261026c"><\/script>');
+  </script>
+  <script src="js/city.js?v=20261026c"></script>
+  <script src="js/missions.js?v=20261026c"></script>
+  <script src="js/missions-pt.js?v=20261026c"></script>
+  <script src="js/traffic.js?v=20261026c"></script>
+  <script src="js/events.js?v=20261026c"></script>
+  <script src="js/voice.js?v=20261026c"></script>
+  <script src="js/game.js?v=20261026c"></script>
 </body>
 </html>
