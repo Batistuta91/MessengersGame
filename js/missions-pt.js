@@ -697,9 +697,17 @@
         const st = q('ptS');
         return st.step === 'drive' ? SP.zoneGreat : st.step === 'done' ? null : yoel;
       }
+      // משימת ברסלב: לניידת, ואחר כך לתחנה הבאה
+      if (a === 'ptB') {
+        const ev = bresStage();
+        if (!ev) return null;
+        if (ev.state === 'ask') return { x: ev.bv.x, z: ev.bv.z };
+        if (ev.state === 'drive') return { x: ev.stops[ev.i].cx, z: ev.stops[ev.i].cz };
+        return null;
+      }
       // אין משימה פעילה אבל יש מה להתחיל: המפה מובילה לר׳ מנחם
       const nx = nextQuest();
-      if ((nx && available(nx)) || q('ptS').status === 'idle') return api.npcById.moshe;
+      if (!a && ((nx && available(nx)) || q('ptS').status === 'idle')) return api.npcById.moshe;
       return null;
     }
     function mapDots(dot) {
