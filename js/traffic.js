@@ -162,7 +162,9 @@
     ]);
     const mat = new T.MeshLambertMaterial({ vertexColors: true });
     const NCAR = 36, NBUS = 3;
-    const carIM = new T.InstancedMesh(carGeo, mat, NCAR), busIM = new T.InstancedMesh(busGeo, mat, NBUS);
+    // לאוטובוסים חומר נפרד וצבע בסיס לבן — חומר משותף בלי צבע מופע יצא שחור לגמרי
+    const busMat = new T.MeshLambertMaterial({ vertexColors: true });
+    const carIM = new T.InstancedMesh(carGeo, mat, NCAR), busIM = new T.InstancedMesh(busGeo, busMat, NBUS);
     carIM.castShadow = busIM.castShadow = true;
     carIM.frustumCulled = busIM.frustumCulled = false;
     scene.add(carIM, busIM);
@@ -173,9 +175,11 @@
       const bus = i >= NCAR;
       const c = { bus, idx: bus ? i - NCAR : i, e: null, t: 0, v: 0, x: 0, z: 0, h: 0, stuck: 0, ghost: 0, wait: 0, len: bus ? 11 : 3.9 };
       if (!bus) carIM.setColorAt(c.idx, col.set(COLS[(rnd() * COLS.length) | 0]));
+      else busIM.setColorAt(c.idx, col.set(0xffffff));
       cars.push(c);
     }
     carIM.instanceColor.needsUpdate = true;
+    busIM.instanceColor.needsUpdate = true;
 
     // ---------- מיקום והצבה ----------
     const lane = (e) => Math.min(e.w / 4, 1.8);
