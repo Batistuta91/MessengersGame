@@ -34,6 +34,28 @@
     const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', pt3: 'פרק 2 · משימה 3 · ״ספר תורה לבית הכנסת הגדול״' };
     const MEN = 'ר׳ מנחם';
 
+    // ================= סימון מקום עצירה לטנק: עמוד אור + טבעת ועיגול זוהר על הרצפה =================
+    const beamMat = new T.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.22, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide });
+    const ringMat = new T.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85, depthWrite: false, side: T.DoubleSide });
+    const discMat = new T.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.18, depthWrite: false, side: T.DoubleSide });
+    function makeBeam(z, r) {
+      const g = new T.Group();
+      const c = new T.Mesh(new T.CylinderGeometry(r, r, 8, 24, 1, true), beamMat);
+      c.position.y = 4;
+      const rg = new T.Mesh(new T.RingGeometry(r - 0.35, r, 40), ringMat);
+      rg.rotation.x = -Math.PI / 2;
+      rg.position.y = 0.22;
+      const dc = new T.Mesh(new T.CircleGeometry(r - 0.35, 40), discMat);
+      dc.rotation.x = -Math.PI / 2;
+      dc.position.y = 0.21;
+      g.add(c, rg, dc);
+      g.position.set(z ? z.x : 0, 0, z ? z.z : 0);
+      g.visible = false;
+      scene.add(g);
+      return { g, rg };
+    }
+    const BEAMS = { hosp: makeBeam(SP.zoneHosp, 4.2), great: makeBeam(SP.zoneGreat, 4.2) };
+
     // ================= משימה 1: שוק של ברכות =================
     // ארבעה בעלי דוכנים לפני שבת; לכל אחד מבצע אחר. ערכת המבצעים בתא המטען של הטנק.
     const OWNERS = [
@@ -737,7 +759,15 @@
           father.hidden = !(q('pt2').status === 'active' && q('pt2').step === 'meet');
         }
       },
-      visuals() {},
+      visuals(dt, t) {
+        // מראים איפה לעצור רק כשבאמת צריך לעצור שם עם הטנק
+        const a = activeId();
+        BEAMS.hosp.g.visible = a === 'pt2' && q('pt2').step === 'drive';
+        BEAMS.great.g.visible = (a === 'pt3' && q('pt3').step === 'march') || (a === 'ptS' && q('ptS').step === 'drive');
+        const pulse = 1 + Math.sin((t || performance.now() / 1000) * 4) * 0.05;
+        BEAMS.hosp.rg.scale.setScalar(pulse);
+        BEAMS.great.rg.scale.setScalar(pulse);
+      },
       activeQuest() {
         return activeId();
       },

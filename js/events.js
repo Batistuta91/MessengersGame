@@ -78,6 +78,7 @@
       }
       for (const b of boxes) b.visible = false;
       if (ev.type === 'mezuzah' && ev.state !== 'done') mezMesh.visible = false;
+      trempBeam.visible = false;
       if (ev.type === 'breslev') clearBreslev();
       truck.group.visible = truckBoxes.visible = false;
       ev = null;
@@ -242,7 +243,8 @@
       const bv = api.addVehicle('breslev', 'breslev', at.x, at.z, at.h);
       bv.locked = true;
       ev = { type: 'breslev', npc: 'nachman', state: 'ask', ttl: 240, x: at.x, z: at.z, bv, stops, i: 0, at };
-      show(NP.nachman, at.cx - at.nx * 1.2, at.cz - at.nz * 1.2, Math.atan2(-at.nx, -at.nz));
+      // נחמן עומד בין הניידת למדרכה (לא צמוד לקירות)
+      show(NP.nachman, at.x + at.nx * 2.5 + at.ux * 1.5, at.z + at.nz * 2.5 + at.uz * 1.5, Math.atan2(-at.nx, -at.nz));
       stops.forEach((st, i) => placeCrowd(i, st));
       NP.nachman.nodes = {
         a: { s: 'npc', t: 'נ נח נחמ נחמן מאומן! שליח, יופי שבאת! אנחנו יוצאים עכשיו לשמח את העיר — שלוש תחנות, ריקודים ושמחה גדולה.', go: 'b' },
@@ -458,7 +460,24 @@
       };
       return true;
     }
+    const trempBeam = (() => {
+      const g = new T.Group();
+      const c = new T.Mesh(new T.CylinderGeometry(4, 4, 8, 24, 1, true), new T.MeshBasicMaterial({ color: 0xb07cff, transparent: true, opacity: 0.2, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide }));
+      c.position.y = 4;
+      const rg = new T.Mesh(new T.RingGeometry(3.65, 4, 40), new T.MeshBasicMaterial({ color: 0xb07cff, transparent: true, opacity: 0.85, depthWrite: false, side: T.DoubleSide }));
+      rg.rotation.x = -Math.PI / 2;
+      rg.position.y = 0.22;
+      const dc = new T.Mesh(new T.CircleGeometry(3.65, 40), new T.MeshBasicMaterial({ color: 0xb07cff, transparent: true, opacity: 0.16, depthWrite: false, side: T.DoubleSide }));
+      dc.rotation.x = -Math.PI / 2;
+      dc.position.y = 0.21;
+      g.add(c, rg, dc);
+      g.visible = false;
+      scene.add(g);
+      return g;
+    })();
     function updateTremp() {
+      trempBeam.visible = ev.state === 'ride';
+      if (ev.state === 'ride') trempBeam.position.set(ev.dest.x, 0, ev.dest.z);
       const n = NP.zaken, d = api.drv;
       if (ev.state === 'pickup' && d === van && Math.abs(van.v) < 2 && Math.hypot(van.x - n.x, van.z - n.z) < 8) {
         ev.state = 'ride';
@@ -510,6 +529,9 @@
         if (!ev) return out;
         if (ev.type === 'siddur' && ev.state === 'fetch')
           out.push({ x: van.x - Math.sin(van.h) * 2.9, z: van.z - Math.cos(van.h) * 2.9, r: 2.2, prio: true, label: 'לקחת סידור מתא המטען של הטנק', run: () => { ev.state = 'have'; A.load(); api.toast('יש סידור! חזרה ליעקב'); NP.yaakov.nodes = { a: { s: 'npc', t: 'וואו, הבאת! תודה, תודה. עכשיו אני יכול להתפלל.', end: () => reward(6, 1, 'יעקב התפלל מנחה!') } }; } });
+        // אפשר לעלות לניידת גם בלי לדבר קודם עם נחמן
+        if (ev.type === 'breslev' && ev.state === 'ask')
+          out.push({ x: ev.bv.x, z: ev.bv.z, r: 3.6, prio: true, label: 'לעלות לניידת של ברסלב', run: () => { api.toast('נחמן: ״נ נח נחמ נחמן מאומן! עולים — יוצאים לשמח!״', 'gold'); boardBreslev(); } });
         if (ev.type === 'mezuzah' && ev.state === 'fetch')
           out.push({ x: van.x - Math.sin(van.h) * 3.4, z: van.z - Math.cos(van.h) * 3.4, r: 2.4, prio: true, label: 'לקחת מזוזה מתא המטען של הטנק', run: () => { ev.state = 'have'; A.load(); api.toast('יש מזוזה! קבעו אותה בפתח החנות של דוד, בצד ימין'); } });
         if (ev.type === 'mezuzah' && ev.state === 'have')
