@@ -1623,7 +1623,7 @@
       if (n < S.chabadLevel) { st = '✓ הושלם'; cls = 'done'; }
       else if (n === S.chabadLevel) { st = 'הדרגה הנוכחית'; cls = 'current'; }
       else if (n === nextLv && lockText[n]) { st = canUp ? '' : lockText[n]; cls = canUp ? 'next' : 'locked'; }
-      else { st = '🔒 בגרסה המלאה'; cls = 'locked'; }
+      else { st = '🔒 בהמשך'; cls = 'locked'; }
       h += '<li class="' + cls + '"><div class="lv-head"><span class="lv-n">' + n + '</span><b>' + L.name + '</b><em>' + st + '</em></div><p>' + L.desc + '</p>';
       if (n === nextLv && canUp) h += '<button id="btn-upgrade" class="btn big">שדרגו ל' + L.name + '</button>';
       h += '</li>';
@@ -1841,7 +1841,7 @@
   // ================= מסך פתיחה =================
   // העיר נבנתה — הכפתור (שהציג ״טוען״) מוכן ללחיצה
   $('btn-play').disabled = false;
-  $('btn-play').textContent = saved ? 'המשך מהשמירה' : 'שחקו בדמו';
+  $('btn-play').textContent = saved ? 'המשך מהשמירה' : 'שחקו';
   if (saved) show($('btn-new'), true);
   $('btn-play').addEventListener('click', () => {
     initAudioOnce();
