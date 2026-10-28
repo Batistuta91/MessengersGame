@@ -47,7 +47,7 @@
     truckBoxes.visible = false;
     scene.add(truckBoxes);
 
-    let ev = null, nextT = 45, doneCount = 0;
+    let ev = null, nextT = 45, doneCount = 0, onQuestDone = null;
     const freeAt = (x, z) => !W.collide(x, z, 0.7).hit;
     function pickSpot(minD, maxD) {
       const list = W.pathsNear ? W.pathsNear(player.x, player.z) : W.paths;
@@ -397,6 +397,12 @@
         A.setStation(0);
       }
       reward(12, 3, 'שימחתם את העיר עם החבר׳ה מברסלב!');
+      // כשזו משימה של פרק 2 — מודיעים למשימות
+      if (ev.quest && onQuestDone) {
+        const cb = onQuestDone;
+        onQuestDone = null;
+        setTimeout(cb, 1500);
+      }
       NP.nachman.nodes = { a: { s: 'npc', t: 'אשריך שליח! איזו שמחה! נ נח נחמ נחמן מאומן — ובחב״ד אומרים: ״שמחה פורצת גדר״. נתראה בתחנה הבאה!' } };
     }
     function clearBreslev() {
@@ -587,6 +593,16 @@
       force(i) {
         clear();
         return STARTERS[i]();
+      },
+      // הניידת של ברסלב כמשימה (פרק 2): לא נעלמת עם הזמן, ומודיעה בסוף
+      startBreslevQuest(cb) {
+        clear();
+        if (!startBreslev()) return false;
+        ev.quest = true;
+        ev.ttl = 1e9;
+        onQuestDone = cb;
+        A.chime && A.chime();
+        return true;
       },
     };
   };

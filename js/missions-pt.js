@@ -17,10 +17,11 @@
     const DEF = {
       pt1: () => ({ status: 'locked', timeLeft: 300, elapsed: 0, bag: false, got: {}, owners: {}, joy: 0, comm: 0 }),
       pt2: () => ({ status: 'locked', timeLeft: 360, elapsed: 0, step: 'load', gifts: 0, intact: 3, bumps: 0, joy: 0, comm: 0 }),
+      ptB: () => ({ status: 'locked', elapsed: 0, joy: 0, comm: 0 }),
       pt3: () => ({ status: 'locked', elapsed: 0, step: 'march', lags: 0, lagT: 0, joy: 0, comm: 0 }),
       ptS: () => ({ status: 'locked', elapsed: 0, step: 'meet', story: 0, storyT: 0, joy: 0, comm: 0 }),
     };
-    const QIDS = ['pt1', 'pt2', 'pt3'];
+    const QIDS = ['pt1', 'pt2', 'ptB', 'pt3'];
     if (!S().quests) S().quests = {};
     for (const id of [...QIDS, 'ptS']) {
       S().quests[id] = Object.assign(DEF[id](), S().quests[id] || {});
@@ -29,9 +30,9 @@
     const q = (id) => S().quests[id];
     const done = (id) => q(id).status === 'complete';
     const activeId = () => [...QIDS, 'ptS'].find((id) => q(id).status === 'active') || null;
-    const available = (id) => (id === 'pt1' ? true : id === 'pt2' ? done('pt1') : done('pt2'));
+    const available = (id) => (id === 'pt1' ? true : id === 'pt2' ? done('pt1') : id === 'ptB' ? done('pt2') : done('ptB') || done('pt3'));
     const nextQuest = () => QIDS.find((id) => !done(id)) || null;
-    const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', pt3: 'פרק 2 · משימה 3 · ״ספר תורה לבית הכנסת הגדול״' };
+    const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', ptB: 'פרק 2 · משימה 3 · ״לשמח את העיר״', pt3: 'פרק 2 · משימה 4 · ״ספר תורה לבית הכנסת הגדול״' };
     const MEN = 'ר׳ מנחם';
 
     // ================= סימון מקום עצירה לטנק: עמוד אור + טבעת ועיגול זוהר על הרצפה =================
@@ -524,15 +525,60 @@
         b: { s: 'npc', t: 'הכנו שלוש מתנות ליד הדלת. העמס אותן על הטנק וסע בעדינות — יש בלונים על הגג! שש דקות עד סוף שעות הביקור.', c: [{ t: 'בדרך לשניידר!', fx: startPt2 }, { t: 'עוד רגע', go: 'd' }] },
         d: { s: 'npc', t: 'המתנות מחכות ליד הדלת.' },
       }),
+      ptB: () => ({
+        a: { s: 'npc', t: 'שמע, החבר׳ה מברסלב הגיעו לעיר עם הניידת והרמקול הענק. הם רוצים לשמח את פתח תקווה — שלוש התקהלויות, ריקודים ברחוב.', go: 'b' },
+        b: { s: 'npc', t: 'שמחה של יהודי — זה הכי חב״די שיש! תצטרף אליהם? הניידת מחכה לא רחוק מכאן.', c: [{ t: 'יאללה, לשמח את העיר!', fx: startPtB }, { t: 'עוד רגע', go: 'd' }] },
+        d: { s: 'npc', t: 'הם לא הולכים לשום מקום — נ נח נחמ...' },
+      }),
       pt3: () => ({
         a: { s: 'npc', t: 'זה היום! ספר תורה חדש, נכתב בשביל הקהילה — ואנחנו מכניסים אותו לבית הכנסת הגדול.', go: 'b' },
         b: { s: 'npc', t: 'אתה מוביל את התהלוכה עם הטנק והניגונים. סע לאט — אנשים הולכים ורוקדים מאחוריך. אם תתרחק מדי, תעצור ותחכה.', c: [{ t: 'יוצאים בשמחה!', fx: startPt3 }, { t: 'עוד רגע', go: 'd' }] },
         d: { s: 'npc', t: 'הספר מחכה, והחופה כבר פרוסה.' },
       }),
     };
+    // ================= משימה 3: לשמח את העיר — עם הניידת של ברסלב =================
+    let bresRetry = 0;
+    function startPtB() {
+      S().quests.ptB = Object.assign(DEF.ptB(), { status: 'active' });
+      launchBres();
+      api.save();
+    }
+    function launchBres() {
+      const EV = api.events && api.events();
+      if (!EV) return false;
+      const ok = EV.startBreslevQuest(completePtB);
+      if (ok) api.toast('הניידת של ברסלב מחכה לך — מסומנת במפה 🎶', 'gold');
+      return ok;
+    }
+    function bresStage() {
+      const EV = api.events && api.events(), ev = EV && EV.current;
+      if (!ev || ev.type !== 'breslev' || !ev.quest) return null;
+      return ev;
+    }
+    function completePtB() {
+      const st = q('ptB');
+      if (st.status !== 'active') return;
+      st.status = 'complete';
+      api.save();
+      api.results({
+        stars: 3,
+        title: 'שימחתם את העיר!',
+        note: '״מצווה גדולה להיות בשמחה תמיד״ — ובחב״ד אומרים: ״שמחה פורצת גדר״.',
+        rows: [['תחנות', '3 מתוך 3'], ['רקדו ברחוב', 'הרבה!']],
+        changes: ['החבר׳ה מברסלב ובית חב״ד — חברים', 'ר׳ מנחם מכין משהו גדול לבית הכנסת הגדול...'],
+      }, 800);
+    }
+
     const HINT = {
       pt1: () => (q('pt1').bag ? 'יש לך את הערכה. ארבעה דוכנים בשוק — דבר עם כל אחד מהם.' : 'סעו עם הטנק לשוק (הקו במפה). ערכת המבצעים בטנק — לוקחים אותה כשיורדים.'),
       pt2: () => ({ load: 'המתנות ליד הדלת של בית חב״ד — הטנק צריך להיות קרוב.', drive: 'סע לשניידר ועצור מול הכניסה. בעדינות!', meet: 'יגאל מחכה ליד הכניסה לבית החולים.' }[q('pt2').step]),
+      ptB: () => {
+        const ev = bresStage();
+        if (!ev || ev.state === 'ask') return 'הניידת של ברסלב מחכה (סימון סגול במפה). עולים אליה — ' + ACT + ' ליד הניידת.';
+        if (ev.state === 'drive') return 'נוסעים עם החבר׳ה לתחנה ' + (ev.i + 1) + ' מתוך 3.';
+        if (ev.state === 'dance') return 'רוקדים! 🎉';
+        return 'עוד רגע...';
+      },
       pt3: () => (q('pt3').step === 'march' ? 'הובל את התהלוכה לבית הכנסת הגדול. לאט — שכולם יעמדו בקצב.' : 'ריקודים!'),
       ptS: () => ({ meet: 'ר׳ יואל יושב בכיכר המתנדבים. בלי לחץ — פשוט לשבת לידו.', ride: 'הביאו את הטנק לכיכר ואספו את ר׳ יואל.', drive: 'סעו לאט לבית הכנסת הגדול, ותקשיבו לסיפורים.', done: '' }[q('ptS').step]),
     };
@@ -681,6 +727,10 @@
         } else if (a === 'pt2') {
           row('מתנות', st.step === 'load' ? 'ליד הדלת' : st.step === 'drive' ? 'בטנק 🚐' : '✓ בשניידר', st.step === 'meet' ? 'ok' : '');
           row('בלונים', st.intact + '/3', st.intact === 3 ? 'ok' : 'later');
+        } else if (a === 'ptB') {
+          const ev = bresStage();
+          row('הניידת', !ev || ev.state === 'ask' ? 'מחכה לך' : '✓ על הניידת', !ev || ev.state === 'ask' ? '' : 'ok');
+          row('תחנות', ev ? Math.min(3, ev.i + (ev.state === 'drive' ? 0 : 1)) + '/3' : '0/3', '');
         } else if (a === 'ptS') {
           h += '</ul><div class="tr-obj">' + HINT.ptS() + '</div>';
           return h;
@@ -753,6 +803,11 @@
           if (a === 'pt2') pt2Update(dt);
           if (a === 'pt3') pt3Update(dt, performance.now() / 1000);
           if (a === 'ptS') ptSUpdate(dt);
+          // המשימה פעילה אבל אין ניידת (למשל אחרי טעינה מחדש) — מזמינים אותה שוב
+          if (a === 'ptB' && !bresStage() && (bresRetry -= dt) <= 0) {
+            bresRetry = 3;
+            launchBres();
+          }
         }
         if (a !== 'ptS') yoel.hidden = !done('ptS');
         if (a !== 'pt2') {

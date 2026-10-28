@@ -1695,7 +1695,7 @@
     if (!ptOpen) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
     else {
       h += '<ul class="jr-list">';
-      h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״ספר תורה לבית הכנסת הגדול״', stOf('pt3'));
+      h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״לשמח את העיר״', stOf('ptB')) + row('משימה 4 · ״ספר תורה לבית הכנסת הגדול״', stOf('pt3'));
       h += row('✦ ״הנכד של המייסדים״', stOf('ptS'), true);
       h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li></ul>';
     }
@@ -1892,6 +1892,7 @@
     say: (n) => talkTo(n),
     results: queueResults,
     travel: (c) => travel(c),
+    events: () => EV,
     setRadio(i) {
       S.radio = i;
       A.setStation(i);
