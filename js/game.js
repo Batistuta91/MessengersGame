@@ -2349,7 +2349,8 @@
     gps.t -= dt;
     if (gps.t <= 0) {
       gps.t = 0.7;
-      gps.route = W.route(px, pz, t.x, t.z);
+      // אם לא נמצא מסלול ברחובות — לפחות קו ישר ליעד, כדי שתמיד יהיה כיוון
+      gps.route = W.route(px, pz, t.x, t.z) || [[px, pz], [t.x, t.z]];
     } else if (gps.route) gps.route[0] = [px, pz];
   }
   // ================= מפה גדולה (M): כל העיר, יעדים, ונקודת ציון בלחיצה =================

@@ -24,8 +24,7 @@
     if (!S().quests) S().quests = {};
     for (const id of [...QIDS, 'ptS']) {
       S().quests[id] = Object.assign(DEF[id](), S().quests[id] || {});
-      // משימה שהייתה באמצע כשנסגר המשחק — מתחילים אותה מחדש
-      if (S().quests[id].status === 'active') S().quests[id] = Object.assign(DEF[id](), { status: 'idle' });
+      // משימה שהייתה באמצע כשנסגר המשחק — ממשיכים ממנה (המצב הוויזואלי משוחזר בסוף, ב-resume)
     }
     const q = (id) => S().quests[id];
     const done = (id) => q(id).status === 'complete';
@@ -296,8 +295,7 @@
     chuppah.visible = false;
     scene.add(chuppah);
     let trail = [];
-    function startPt3() {
-      S().quests.pt3 = Object.assign(DEF.pt3(), { status: 'active' });
+    function placeMarchers() {
       const fx = Math.sin(van.h), fz = Math.cos(van.h);
       trail = [];
       for (let k = 0; k < 40; k++) trail.push([van.x - fx * k, van.z - fz * k]);
@@ -307,6 +305,10 @@
         m.p.group.visible = true;
       });
       chuppah.visible = true;
+    }
+    function startPt3() {
+      S().quests.pt3 = Object.assign(DEF.pt3(), { status: 'active' });
+      placeMarchers();
       A.success();
       api.setRadio(1);
       api.toast('הכנסת ספר תורה! הובילו את התהלוכה לבית הכנסת הגדול — לאט, שכולם יעמדו בקצב 🎶', 'gold');
@@ -627,6 +629,9 @@
         const st = q('ptS');
         return st.step === 'drive' ? SP.zoneGreat : st.step === 'done' ? null : yoel;
       }
+      // אין משימה פעילה אבל יש מה להתחיל: המפה מובילה לר׳ מנחם
+      const nx = nextQuest();
+      if ((nx && available(nx)) || q('ptS').status === 'idle') return api.npcById.moshe;
       return null;
     }
     function mapDots(dot) {
@@ -746,6 +751,22 @@
       mapDots,
       trackerHTML,
     };
+    // ממשיכים משימה שהייתה באמצע כשנסגר המשחק
+    (function resume() {
+      const a = activeId();
+      if (a === 'pt2') {
+        const st = q('pt2');
+        giftGrp.visible = st.step === 'load';
+        balloons.visible = st.step === 'drive';
+        balloons.children.forEach((c, i) => (c.visible = Math.floor(i / 2) < st.intact));
+      }
+      if (a === 'pt3') {
+        q('pt3').step = 'march';
+        placeMarchers();
+      }
+      if (a === 'ptS' && q('ptS').step === 'done') q('ptS').step = 'drive';
+      if (a) setTimeout(() => api.toast('ממשיכים מאיפה שעצרנו: ' + TITLES[a], 'gold'), 1200);
+    })();
     return M;
   };
 })();
