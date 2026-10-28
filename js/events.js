@@ -15,6 +15,8 @@
       yaakov: api.addNPC({ id: 'ev_yaakov', name: 'יעקב', role: 'מחפש סידור', x: 0, z: 0, look: { shirt: 0xdfe6ee, pants: 0x3b3b44, skin: 0xe2b088, hair: 0x777777, kippah: 0x222222 } }),
       haim: api.addNPC({ id: 'ev_haim', name: 'חיים', role: 'בעל חנות', x: 0, z: 0, look: { shirt: 0xf3efe2, apron: 0x9c6b3c, pants: 0x4b3b2b, skin: 0xc98e62, cap: 0x2e7d4f } }),
       nachman: api.addNPC({ id: 'ev_nachman', name: 'נחמן', role: 'מהניידת של ברסלב', x: 0, z: 0, look: { shirt: 0xffffff, pants: 0x2b2b2b, skin: 0xe2b088, kippah: 0xffffff, beard: 0x5a3a1a, tzitzit: true } }),
+      david: api.addNPC({ id: 'ev_david', name: 'דוד', role: 'פתח חנות חדשה', x: 0, z: 0, look: { shirt: 0x2e86de, pants: 0x2c3e50, skin: 0xe8c0a0, hair: 0x3a2a1a } }),
+      zaken: api.addNPC({ id: 'ev_zaken', name: 'סבא שלמה', role: 'מחכה לאוטובוס', x: 0, z: 0, look: { shirt: 0xffffff, jacket: 0x4a4a55, pants: 0x3b3b44, skin: 0xe2b088, kippah: 0x222222, beard: 0xeeeeee } }),
       levi: api.addNPC({ id: 'ev_levi', name: 'משפחת לוי', role: 'חדשים בשכונה', x: 0, z: 0, look: { shirt: 0x7fb3d5, pants: 0x2c3e50, skin: 0xf0c8a0, hair: 0x4a2f1b } }),
     };
     for (const k in NP) NP[k].hidden = true;
@@ -48,8 +50,10 @@
     let ev = null, nextT = 45, doneCount = 0;
     const freeAt = (x, z) => !W.collide(x, z, 0.7).hit;
     function pickSpot(minD, maxD) {
+      const list = W.pathsNear ? W.pathsNear(player.x, player.z) : W.paths;
+      if (!list.length) return null;
       for (let k = 0; k < 60; k++) {
-        const p = W.paths[(rnd() * W.paths.length) | 0];
+        const p = list[(rnd() * list.length) | 0];
         const pt = p.pts[(rnd() * p.pts.length) | 0];
         const d = Math.hypot(pt[0] - player.x, pt[1] - player.z);
         if (d > minD && d < maxD && freeAt(pt[0], pt[1])) return { x: pt[0], z: pt[1] };
@@ -73,6 +77,7 @@
         NP[k].nodes = null;
       }
       for (const b of boxes) b.visible = false;
+      if (ev.type === 'mezuzah' && ev.state !== 'done') mezMesh.visible = false;
       if (ev.type === 'breslev') clearBreslev();
       truck.group.visible = truckBoxes.visible = false;
       ev = null;
@@ -191,7 +196,8 @@
       crowds = [0, 1, 2].map(() => CROWD_LOOKS.map(mk));
     }
     function roadSpot(from, minD, maxD, avoid) {
-      const roads = (W.roadList || []).filter((r) => r.cls !== 'path' && r.t !== 'service' && r.w >= 6);
+      // רק כבישים בטווח (בעיר גדולה הגרלה מכל העיר כמעט אף פעם לא נופלת קרוב)
+      const roads = (W.roadList || []).filter((r) => r.cls !== 'path' && r.t !== 'service' && r.w >= 6 && r.pts.some((p) => Math.abs(p[0] - from.x) < maxD + 40 && Math.abs(p[1] - from.z) < maxD + 40));
       for (let k = 0; k < 400 && roads.length; k++) {
         const r = roads[(rnd() * roads.length) | 0];
         const i = (rnd() * (r.pts.length - 1)) | 0;
@@ -403,12 +409,82 @@
       if (crowds) crowds.forEach((g2) => g2.forEach((p) => (p.group.visible = false)));
     }
 
-    const STARTERS = [startSiddur, startBoxes, startFamily, startBreslev];
+    // ---------- 5. מזוזה לחנות החדשה ----------
+    const mezMesh = new T.Mesh(new T.BoxGeometry(0.08, 0.32, 0.08), lam(0xd4a017));
+    mezMesh.visible = false;
+    scene.add(mezMesh);
+    function startMezuzah() {
+      const shops = (W.shops || []).filter((s) => {
+        const d = Math.hypot(s.x - player.x, s.z - player.z);
+        return d > 35 && d < 180;
+      });
+      if (!shops.length) return false;
+      const sh = shops[(rnd() * shops.length) | 0];
+      // הצד הימני של הפתח, על הקיר
+      const door = { x: sh.x - sh.nx * 1.5 + sh.ux * 0.8, z: sh.z - sh.nz * 1.5 + sh.uz * 0.8 };
+      ev = { type: 'mezuzah', npc: 'david', state: 'ask', ttl: 200, x: sh.x, z: sh.z, door };
+      show(NP.david, sh.x - sh.ux * 1.4, sh.z - sh.uz * 1.4, sh.ang);
+      mezMesh.position.set(door.x + sh.nx * 0.05, 1.65, door.z + sh.nz * 0.05);
+      mezMesh.rotation.set(0, sh.ang, -0.4);
+      NP.david.nodes = {
+        a: { s: 'npc', t: 'שלום! פתחתי היום את החנות — חלום של עשר שנים! ...רק דבר אחד חסר: אין מזוזה בכניסה. אמא שלי תהרוג אותי.', go: 'b' },
+        b: {
+          s: 'npc', t: 'אתה במקרה יודע איפה קונים מזוזה כשרה? היום, לפני הלקוחות הראשונים?',
+          c: [
+            { t: 'יש לי מזוזה כשרה בטנק — אני מביא ונקבע ביחד!', fx: () => { ev.state = 'fetch'; api.toast('קחו מזוזה מתא המטען של הטנק (' + ACT + ' מאחורי הטנק)'); } },
+            { t: 'מזל טוב על החנות! אני כבר חוזר עם מזוזה.', fx: () => { ev.state = 'fetch'; } },
+          ],
+        },
+      };
+      return true;
+    }
+    // ---------- 6. טרמפ למנחה ----------
+    function startTremp() {
+      const s = pickSpot(50, 170);
+      if (!s) return false;
+      const sp = W.spots || {};
+      const dz = sp.zoneShul || sp.zoneGreat || W.places.chabadDoor;
+      if (!dz) return false;
+      const dest = { x: dz.x, z: dz.z, name: sp.zoneShul ? 'בית הכנסת' : sp.zoneGreat ? 'בית הכנסת הגדול' : 'בית חב״ד' };
+      if (Math.hypot(dest.x - s.x, dest.z - s.z) < 60) return false;
+      ev = { type: 'tremp', npc: 'zaken', state: 'ask', ttl: 240, x: s.x, z: s.z, dest };
+      show(NP.zaken, s.x, s.z, rnd() * 6);
+      NP.zaken.nodes = {
+        a: { s: 'npc', t: '(מסתכל בשעון) האוטובוס לא הגיע כבר חצי שעה... ומנחה ב' + dest.name + ' מתחילה עוד מעט. ברגל זה רחוק בשבילי.', go: 'b' },
+        b: {
+          s: 'npc', t: 'שלושים שנה לא פספסתי מנחה, אתה יודע?',
+          c: [{ t: 'בוא, אני לוקח אותך בטנק — מגיעים בזמן!', fx: () => { ev.state = 'pickup'; api.toast('הביאו את הטנק לסבא שלמה ועצרו לידו', 'gold'); } }],
+        },
+      };
+      return true;
+    }
+    function updateTremp() {
+      const n = NP.zaken, d = api.drv;
+      if (ev.state === 'pickup' && d === van && Math.abs(van.v) < 2 && Math.hypot(van.x - n.x, van.z - n.z) < 8) {
+        ev.state = 'ride';
+        n.hidden = true;
+        n.evIcon = undefined;
+        A.door && A.door('tank');
+        api.toast('סבא שלמה עלה לטנק — נוסעים ל' + ev.dest.name + '!', 'gold');
+      } else if (ev.state === 'ride' && d === van && Math.abs(van.v) < 2 && Math.hypot(van.x - ev.dest.x, van.z - ev.dest.z) < 11) {
+        ev.state = 'arrive';
+        show(n, van.x + Math.cos(van.h) * 2.6, van.z - Math.sin(van.h) * 2.6, van.h + Math.PI / 2);
+        A.door && A.door('tank');
+        reward(8, 1, 'סבא שלמה הגיע למנחה בזמן!');
+        n.nodes = { a: { s: 'npc', t: 'הגענו! ובזמן! שלושים ואחת שנה בלי לפספס — בזכותך. תבוא להתפלל איתנו?' } };
+      }
+    }
+
+    const STARTERS = [startSiddur, startBoxes, startFamily, startBreslev, startMezuzah, startTremp];
     return {
       update(dt, busy) {
         if (ev) {
           if (ev.type === 'breslev') updateBreslev(dt);
           if (ev.type === 'breslev' && (ev.state === 'drive' || ev.state === 'dance')) return;
+          if (ev.type === 'tremp') {
+            updateTremp();
+            if (ev.state === 'ride') return;
+          }
           ev.ttl -= dt;
           if (ev.ttl <= 0) {
             if (ev.state !== 'done') api.toast('האירוע בשכונה הסתיים — יהיו עוד הזדמנויות');
@@ -434,6 +510,10 @@
         if (!ev) return out;
         if (ev.type === 'siddur' && ev.state === 'fetch')
           out.push({ x: van.x - Math.sin(van.h) * 2.9, z: van.z - Math.cos(van.h) * 2.9, r: 2.2, prio: true, label: 'לקחת סידור מתא המטען של הטנק', run: () => { ev.state = 'have'; A.load(); api.toast('יש סידור! חזרה ליעקב'); NP.yaakov.nodes = { a: { s: 'npc', t: 'וואו, הבאת! תודה, תודה. עכשיו אני יכול להתפלל.', end: () => reward(6, 1, 'יעקב התפלל מנחה!') } }; } });
+        if (ev.type === 'mezuzah' && ev.state === 'fetch')
+          out.push({ x: van.x - Math.sin(van.h) * 3.4, z: van.z - Math.cos(van.h) * 3.4, r: 2.4, prio: true, label: 'לקחת מזוזה מתא המטען של הטנק', run: () => { ev.state = 'have'; A.load(); api.toast('יש מזוזה! קבעו אותה בפתח החנות של דוד, בצד ימין'); } });
+        if (ev.type === 'mezuzah' && ev.state === 'have')
+          out.push({ x: ev.door.x, z: ev.door.z, r: 2.2, prio: true, label: 'לקבוע את המזוזה (״ברוך... לקבוע מזוזה״)', run: () => { mezMesh.visible = true; A.success(); reward(7, 1, 'דוד: ״עכשיו זאת חנות אמיתית!״'); NP.david.nodes = { a: { s: 'npc', t: 'הלקוח הראשון כבר נכנס! אמא שלי תהיה גאה. תבוא לקפה מתי שתרצה.' } }; } });
         if (ev.type === 'boxes' && ev.state === 'carry')
           boxes.forEach((b) => {
             if (!b.visible) return;
@@ -453,6 +533,9 @@
       navTarget() {
         if (!ev || ev.state === 'done') return null;
         if (ev.type === 'siddur' && ev.state === 'fetch') return { x: van.x - Math.sin(van.h) * 2.9, z: van.z - Math.cos(van.h) * 2.9 };
+        if (ev.type === 'mezuzah' && ev.state === 'fetch') return { x: van.x - Math.sin(van.h) * 3.4, z: van.z - Math.cos(van.h) * 3.4 };
+        if (ev.type === 'mezuzah' && ev.state === 'have') return ev.door;
+        if (ev.type === 'tremp' && ev.state === 'ride') return ev.dest;
         if (ev.type === 'breslev') {
           if (ev.state === 'drive') return { x: ev.stops[ev.i].x, z: ev.stops[ev.i].z };
           if (ev.state === 'dance' || ev.state === 'end') return null;

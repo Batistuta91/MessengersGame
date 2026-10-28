@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261026d">
+  <link rel="stylesheet" href="css/style.css?v=20261026v">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -51,6 +51,7 @@
       <div id="gps-btns">
         <button id="gps-home" class="gpsb" title="ניווט לבית חב״ד (B)">🏠</button>
         <button id="gps-tank" class="gpsb" title="מצא את טנק המבצעים (T)">🚐</button>
+        <button id="gps-map" class="gpsb" title="מפת העיר (M)">🗺</button>
       </div>
       <div id="joy" class="joybar" title="שמחה ושליחות">
         <span class="heart">♥</span>
@@ -59,6 +60,7 @@
     </div>
 
     <div id="street-sign"><b id="st-he"></b><small id="st-en"></small></div>
+    <div id="bigmap" class="hidden"><canvas id="bigmap-c"></canvas><div class="bm-bar"><b>מפת העיר</b><span class="bm-tip">לחצו על המפה כדי לסמן יעד · גלגלת או צביטה לזום</span><button id="bm-zin" class="btn">+</button><button id="bm-zout" class="btn">−</button><button id="bm-me" class="btn">🎯</button><button id="bm-close" class="btn">✕</button></div></div>
     <div id="travel" class="hidden"><div class="tv-box"><div class="tv-van">🚐</div><b>נוסעים ל<span id="travel-to"></span>...</b><small>הטנק בדרך</small></div></div>
     <div id="call" class="hidden"><div class="call-ic">📞</div><div class="call-who"><b>משה</b><small>מתקשר אליך…</small></div><button id="call-yes" class="btn">ענה <kbd>E</kbd></button><button id="call-no" class="btn danger">דחה</button></div>
     <div id="bounds-warn" class="hidden"><span>⚠ יצאתם מתחומי העיר — חזרו אחורה</span><i id="bounds-arrow">➜</i></div>
@@ -126,28 +128,40 @@
   </div>
 
   <!-- השהיה -->
+  <div id="journal" class="overlay hidden">
+    <div class="card wide">
+      <h2>📖 יומן השליחות</h2>
+      <div id="journal-body"></div>
+      <div class="btns"><button id="journal-close" class="btn ghost">חזרה</button></div>
+    </div>
+  </div>
+
   <div id="pause" class="overlay hidden">
     <div class="card">
       <h2>המשחק מושהה</h2>
       <div class="btns col">
         <button id="p-resume" class="btn big">המשך</button>
+        <button id="p-journal" class="btn">📖 יומן השליחות</button>
         <button id="p-sound" class="btn">צליל: פועל</button>
         <button id="p-voice" class="btn">קולות דמויות: פועלים</button>
+        <button id="p-look" class="btn">מראה: פיקסלים</button>
         <button id="p-shadows" class="btn">גרפיקה: מלאה</button>
         <button id="p-travel" class="btn hidden">🚐 נסיעה לפתח תקווה</button>
         <button id="p-unstick" class="btn">🆘 תקועים? חזרה לבית חב״ד</button>
+        <div class="p-row"><button id="p-backup" class="btn">💾 גיבוי שמירה</button><button id="p-restore" class="btn">📂 שחזור שמירה</button></div>
         <button id="p-restart" class="btn danger">התחלה מחדש</button>
       </div>
       <table class="controls desk">
         <tr><td>WASD / חצים</td><td>תנועה ונהיגה</td></tr>
         <tr><td>Shift</td><td>ריצה</td></tr>
         <tr><td>E / Enter</td><td>שיחה · כניסה ויציאה מהטנק · דלת · אישור</td></tr>
-        <tr><td>רווח</td><td>בלם ברכב · קפיצה ברגל</td></tr>
+        <tr><td>רווח / S</td><td>בלם ברכב (וכשעומדים: רוורס) · קפיצה ברגל</td></tr>
         <tr><td>H</td><td>צופר</td></tr>
         <tr><td>R</td><td>רדיו: קול חב״ד / ניגונים / כבוי</td></tr>
         <tr><td>N</td><td>השיר הבא ברדיו</td></tr>
         <tr><td>B</td><td>ניווט לבית חב״ד (מסלול צהוב במפה)</td></tr>
         <tr><td>T</td><td>מצא את טנק המבצעים</td></tr>
+        <tr><td>M</td><td>מפת העיר — לחיצה על המפה מסמנת יעד</td></tr>
         <tr><td>1–3 / ↑↓</td><td>בחירת תשובה בשיחה</td></tr>
         <tr><td>עכבר</td><td>סיבוב המצלמה (לחצו על המסך כדי לנעול)</td></tr>
         <tr><td>V</td><td>החלפת מצלמה: גוף שלישי / מבט על</td></tr>
@@ -177,7 +191,7 @@
       <h1>השליחים<span>אין פה רגע דל</span></h1>
       <p class="tagline">סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה.</p>
       <div class="title-btns">
-        <button id="btn-play" class="btn big">שחקו בדמו</button>
+        <button id="btn-play" class="btn big" disabled>⏳ טוען את העיר...</button>
         <button id="btn-new" class="btn ghost hidden">משחק חדש</button>
       </div>
       <p class="mobile-hint">בטלפון: לחצו ״שחקו בדמו״ וסובבו את המכשיר לרוחב</p>
@@ -187,14 +201,14 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js?v=20261026d"></script>
-  <script src="js/util.js?v=20261026d"></script>
-  <script src="music/playlist.js?v=20261026d"></script>
+  <script src="lib/three.min.js?v=20261026v"></script>
+  <script src="js/util.js?v=20261026v"></script>
+  <script src="music/playlist.js?v=20261026v"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js?v=20261026d" onerror="this.remove()"></script>
-  <script src="js/audio.js?v=20261026d"></script>
-  <script src="js/entities.js?v=20261026d"></script>
-  <script src="js/world.js?v=20261026d"></script>
+  <script src="music/playlist.local.js?v=20261026v" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261026v"></script>
+  <script src="js/entities.js?v=20261026v"></script>
+  <script src="js/world.js?v=20261026v"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -205,19 +219,20 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261026d"><\/script>');
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261026v"><\/script>');
     })();
   </script>
   <script>
     // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
-    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261026d"><\/script>');
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261026v"><\/script>');
   </script>
-  <script src="js/city.js?v=20261026d"></script>
-  <script src="js/missions.js?v=20261026d"></script>
-  <script src="js/missions-pt.js?v=20261026d"></script>
-  <script src="js/traffic.js?v=20261026d"></script>
-  <script src="js/events.js?v=20261026d"></script>
-  <script src="js/voice.js?v=20261026d"></script>
-  <script src="js/game.js?v=20261026d"></script>
+  <script src="js/city.js?v=20261026v"></script>
+  <script src="js/missions.js?v=20261026v"></script>
+  <script src="js/missions-pt.js?v=20261026v"></script>
+  <script src="js/traffic.js?v=20261026v"></script>
+  <script src="js/events.js?v=20261026v"></script>
+  <script src="js/collect.js?v=20261026v"></script>
+  <script src="js/voice.js?v=20261026v"></script>
+  <script src="js/game.js?v=20261026v"></script>
 </body>
 </html>

@@ -27,7 +27,21 @@
     return '#' + c.getHexString();
   };
 
+  // מראה חלק (הגדרה בתפריט): טקסטורות ברזולוציה גבוהה עם סינון, במקום פיקסלים גדולים
+  G.SMOOTH = (function () {
+    if (/[?&]look=smooth/.test(location.search)) return true;
+    if (/[?&]look=pixel/.test(location.search)) return false;
+    try {
+      const s = JSON.parse(localStorage.getItem('shluchim-demo-v1') || 'null');
+      return !!(s && s.settings && s.settings.look === 'smooth');
+    } catch (e) {
+      return false;
+    }
+  })();
+
   G.speckle = function (g, w, h, base, rnd, n, amt) {
+    // במראה החלק: רעש עדין בהרבה (אחרת הנקודות נראות כמו ריבועים)
+    if (G.SMOOTH) amt *= 0.4;
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
     for (let i = 0; i < n; i++) {
@@ -38,11 +52,16 @@
 
   G.canvasTex = function (w, h, draw, repeat, smooth) {
     const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    draw(c.getContext('2d'), w, h);
+    // במראה החלק מציירים פי 4 (עד 1024 פיקסלים) — קווים חדים, בלי מדרגות
+    const S = G.SMOOTH ? Math.max(1, Math.min(4, Math.floor(1024 / Math.max(w, h)))) : 1;
+    c.width = w * S;
+    c.height = h * S;
+    const ctx = c.getContext('2d');
+    if (S > 1) ctx.scale(S, S);
+    draw(ctx, w, h);
     const t = new T.CanvasTexture(c);
-    if (!smooth) {
+    if (G.SMOOTH) t.anisotropy = 4;
+    else if (!smooth) {
       t.magFilter = T.NearestFilter;
       t.minFilter = T.NearestFilter;
       t.generateMipmaps = false;

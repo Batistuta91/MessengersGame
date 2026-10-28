@@ -18,20 +18,21 @@
       pt1: () => ({ status: 'locked', timeLeft: 300, elapsed: 0, bag: false, got: {}, owners: {}, joy: 0, comm: 0 }),
       pt2: () => ({ status: 'locked', timeLeft: 360, elapsed: 0, step: 'load', gifts: 0, intact: 3, bumps: 0, joy: 0, comm: 0 }),
       pt3: () => ({ status: 'locked', elapsed: 0, step: 'march', lags: 0, lagT: 0, joy: 0, comm: 0 }),
+      ptS: () => ({ status: 'locked', elapsed: 0, step: 'meet', story: 0, storyT: 0, joy: 0, comm: 0 }),
     };
     const QIDS = ['pt1', 'pt2', 'pt3'];
     if (!S().quests) S().quests = {};
-    for (const id of QIDS) {
+    for (const id of [...QIDS, 'ptS']) {
       S().quests[id] = Object.assign(DEF[id](), S().quests[id] || {});
       // משימה שהייתה באמצע כשנסגר המשחק — מתחילים אותה מחדש
       if (S().quests[id].status === 'active') S().quests[id] = Object.assign(DEF[id](), { status: 'idle' });
     }
     const q = (id) => S().quests[id];
     const done = (id) => q(id).status === 'complete';
-    const activeId = () => QIDS.find((id) => q(id).status === 'active') || null;
+    const activeId = () => [...QIDS, 'ptS'].find((id) => q(id).status === 'active') || null;
     const available = (id) => (id === 'pt1' ? true : id === 'pt2' ? done('pt1') : done('pt2'));
     const nextQuest = () => QIDS.find((id) => !done(id)) || null;
-    const TITLES = { pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', pt3: 'פרק 2 · משימה 3 · ״ספר תורה לבית הכנסת הגדול״' };
+    const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', pt3: 'פרק 2 · משימה 3 · ״ספר תורה לבית הכנסת הגדול״' };
     const MEN = 'ר׳ מנחם';
 
     // ================= משימה 1: שוק של ברכות =================
@@ -48,6 +49,53 @@
       o.n = api.addNPC({ id: o.id, name: o.name, role: o.role, x: s.x, z: s.z, rot: s.rot, look: o.look });
     });
     const N = (id) => api.npcById[id];
+    // קונים בשוק: מסתובבים בין הדוכנים (רק לאווירה)
+    const shoppers = [];
+    if (SP.stalls && SP.stalls.length) {
+      const SH_LOOKS = [
+        { shirt: 0x8fb3d9, pants: 0x2c3e50, skin: 0xd9a27a, kippah: 0x1b3a8a, hair: 0x333333 },
+        { shirt: 0xf39c12, pants: 0x34495e, skin: 0xf0c8a0, cap: 0xd62828 },
+        { shirt: 0xffffff, jacket: 0x2b2b33, pants: 0x2b2b33, skin: 0xe8b98f, hat: 'fedora', beard: 0x777777 },
+        { shirt: 0x27ae60, pants: 0x222222, skin: 0xc98e62, hair: 0x222222, backpack: 0x9b59b6 },
+        { shirt: 0xe84393, pants: 0x2d3436, skin: 0xf5d6b8, hair: 0x6b4423 },
+        { shirt: 0xbdc3c7, pants: 0x3b3b44, skin: 0xe2b088, kippah: 0xffffff, beard: 0x5a3a1a },
+      ];
+      const a0 = SP.stalls[0], a1 = SP.stalls[SP.stalls.length - 1];
+      const fx = Math.sin(a0.rot), fz = Math.cos(a0.rot);
+      SH_LOOKS.forEach((lk, i) => {
+        const p = G.makePerson(lk);
+        p.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        scene.add(p.group);
+        // מסלול: לאורך שורת הדוכנים, קצת מולם
+        const off = 1.6 + (i % 3) * 0.9;
+        shoppers.push({ p, ax: a0.x - fx * off, az: a0.z - fz * off, bx: a1.x - fx * off, bz: a1.z - fz * off, t: i / SH_LOOKS.length, sp: 0.04 + (i % 3) * 0.015, dir: i % 2 ? 1 : -1, wait: 0, ph: i });
+      });
+    }
+    function updateShoppers(dt, t) {
+      for (const s of shoppers) {
+        const near = Math.hypot((s.ax + s.bx) / 2 - player.x, (s.az + s.bz) / 2 - player.z);
+        if (near > 160) {
+          s.p.group.visible = false;
+          continue;
+        }
+        s.p.group.visible = true;
+        let moving = false;
+        if (s.wait > 0) s.wait -= dt;
+        else {
+          s.t += s.dir * s.sp * dt;
+          moving = true;
+          if (s.t > 1 || s.t < 0) {
+            s.dir = -s.dir;
+            s.t = G.clamp(s.t, 0, 1);
+            s.wait = 2 + Math.random() * 3;
+          } else if (Math.random() < dt * 0.08) s.wait = 1.5 + Math.random() * 2.5;
+        }
+        const x = s.ax + (s.bx - s.ax) * s.t, z = s.az + (s.bz - s.az) * s.t;
+        const bob = G.animatePerson(s.p, t * 6 + s.ph, moving ? 1 : 0);
+        s.p.group.position.set(x, bob, z);
+        s.p.group.rotation.y = moving ? Math.atan2((s.bx - s.ax) * s.dir, (s.bz - s.az) * s.dir) : SP.stalls[0].rot;
+      }
+    }
     function giveTo(o, kind) {
       const st = q('pt1');
       st.owners[o.id] = kind;
@@ -361,6 +409,85 @@
       });
     }
 
+    // ================= משימה סודית: הנכד של המייסדים =================
+    // ר׳ יואל יושב לבד בכיכר המתנדבים. לוקחים אותו בטנק לבית הכנסת הגדול, שבו התפלל סבא שלו.
+    const sq = W.places.find((p) => /כיכר המתנדבים/.test(p.he || '')) || { x: (SP.greatDoor || player).x + 25, z: (SP.greatDoor || player).z + 25 };
+    let yx = sq.x, yz = sq.z;
+    for (let k = 0; k < 12 && W.collide(yx, yz, 0.6).hit; k++) yx += 1.5;
+    const yoel = api.addNPC({ id: 'pt_yoel', name: 'ר׳ יואל', role: 'נכד של מייסדי המושבה', x: yx, z: yz, rot: 0, look: { shirt: 0xffffff, jacket: 0x5d5d6b, pants: 0x3b3b44, skin: 0xe8c0a0, hat: 'fedora', beard: 0xf0f0f0 } });
+    yoel.hidden = true;
+    const STORIES = [
+      'סבא שלי הגיע לכאן ב־1878. ביצות, יתושים, קדחת... כולם אמרו שהם משוגעים.',
+      'הם קראו למקום ״פתח תקווה״ — מהפסוק ״ועמק עכור לפתח תקווה״. מקום של ייאוש שהפך לתקווה.',
+      'כל ערב שבת סבא היה הולך לבית הכנסת הגדול. אני הייתי ילד, מחזיק לו את היד.',
+      'אחרי שהוא נפטר... הפסקתי ללכת. שישים שנה לא נכנסתי לשם.',
+    ];
+    function dlgYoel() {
+      const st = q('ptS');
+      if (done('ptS')) return { a: { s: 'npc', t: 'שבת שלום, שליח. אני כבר לא יושב לבד בכיכר — יש לי מקום קבוע בבית הכנסת.' } };
+      if (st.step !== 'meet') return { a: { s: 'npc', t: 'אני מוכן. ניסע לאט, כן?' } };
+      return {
+        a: { s: 'narr', t: 'זקן יושב על ספסל בכיכר, מחזיק סידור ישן עם כריכה מתפוררת. הוא מסתכל על בית הכנסת הגדול מרחוק.', c: [{ t: 'לשבת לידו בשקט', go: 'b' }, { t: 'שלום! רוצה להניח תפילין?', go: 'a2' }] },
+        a2: { s: 'npc', t: '(מחייך בעצב) תפילין... אולי. קודם תשב רגע, בחור.', go: 'b' },
+        b: { s: 'npc', t: 'זה הסידור של סבא שלי. מייסדי המושבה, אתה יודע? הוא התפלל שם, בבית הכנסת הגדול.', c: [{ t: 'ואתה? אתה מתפלל שם?', go: 'c' }] },
+        c: { s: 'npc', t: 'אני? ...שישים שנה לא הייתי. הרגליים כבר לא מה שהיו, והלב... גם הוא לא.', c: [{ t: 'יש לי טנק עם מזגן וניגונים. ניסע ביחד?', go: 'd' }] },
+        d: { s: 'npc', t: '(שותק רגע ארוך) ...טוב. אבל לאט. ואתה מקשיב לסיפורים של זקן.', end: () => { st.step = 'ride'; api.toast('הביאו את הטנק לכיכר ואספו את ר׳ יואל', 'gold'); api.save(); } },
+      };
+    }
+    function startSecretPT() {
+      S().quests.ptS = Object.assign(DEF.ptS(), { status: 'active' });
+      yoel.hidden = false;
+      api.toast('״הנכד של המייסדים״ — בלי שעון. רק להקשיב.', 'gold');
+      api.save();
+    }
+    function ptSUpdate(dt) {
+      const st = q('ptS');
+      yoel.hidden = st.step === 'drive' || st.step === 'done';
+      if (st.step === 'drive') {
+        st.storyT += dt;
+        // סיפור כל 14 שניות, רק כשבאמת נוסעים
+        if (st.story < STORIES.length && st.storyT > 14 && Math.abs(van.v) > 2) {
+          st.storyT = 0;
+          const t = STORIES[st.story++];
+          api.toast('ר׳ יואל: ״' + t + '״');
+          if (G.voice) G.voice.speak(t, 'pt_yoel', 'ר׳ יואל');
+        }
+      }
+    }
+    function arriveSecretPT() {
+      const st = q('ptS');
+      st.step = 'done';
+      const gs = SP.greatDoor || player;
+      yoel.x = yoel.def.x = gs.x + Math.sin(gs.rot || 0) * 2;
+      yoel.z = yoel.def.z = gs.z + Math.cos(gs.rot || 0) * 2;
+      yoel.rot = yoel.rotT = (gs.rot || 0) + Math.PI;
+      yoel.hidden = false;
+      if (W.greatLights) W.greatLights.visible = true;
+      api.say({
+        id: 'pt_yoel', def: yoel.def, x: yoel.x, z: yoel.z, rot: yoel.rot, p: yoel.p,
+        nodes: {
+          a: { s: 'narr', t: 'ר׳ יואל יורד מהטנק לאט, נשען עליך. הוא עומד מול הדלת הגדולה ולא זז.', go: 'b' },
+          b: { s: 'npc', t: '...שם, ליד ארון הקודש. שם הוא ישב. ואני לידו, עם הרגליים שלא הגיעו לרצפה.', go: 'c' },
+          c: { s: 'narr', t: 'על הקיר, בלוח התורמים הישן, חרוט שם: ״יואל בן שמואל — ממייסדי המושבה״. הזקן מעביר אצבע על האותיות.', go: 'd' },
+          d: { s: 'npc', t: 'קראו לי על שמו. ...תגיד, בחור, יש לך במקרה תפילין בטנק?', c: [{ t: 'תמיד. ואני אחכה לך גם בשבת הבאה.', go: 'e' }] },
+          e: { s: 'narr', t: 'בפעם הראשונה מזה שישים שנה, ר׳ יואל נכנס לבית הכנסת הגדול.', end: completeSecretPT },
+        },
+      });
+    }
+    function completeSecretPT() {
+      const st = q('ptS');
+      st.status = 'complete';
+      api.addJoy(20);
+      api.addCommunity(3);
+      api.save();
+      api.results({
+        title: 'הנכד של המייסדים',
+        note: '״ועמק עכור לפתח תקווה״ — לפעמים התקווה מחכה שישים שנה, בדיוק מעבר לרחוב.',
+        rows: [['שעון', 'לא היה'], ['ר׳ יואל', 'חזר לבית הכנסת של סבא']],
+        changes: ['ר׳ יואל מתפלל מעכשיו בבית הכנסת הגדול', 'בבית הכנסת דולקים אורות של שמחה'],
+      }, 1500);
+    }
+
     // ================= ר׳ מנחם: הצעות, רמזים וטלפון =================
     const OFFER = {
       pt1: () => ({
@@ -380,20 +507,27 @@
       }),
     };
     const HINT = {
-      pt1: () => (q('pt1').bag ? 'יש לך את הערכה. ארבעה דוכנים בשוק — דבר עם כל אחד מהם.' : 'קודם קח את ערכת המבצעים מתא המטען של הטנק, ואז לשוק.'),
+      pt1: () => (q('pt1').bag ? 'יש לך את הערכה. ארבעה דוכנים בשוק — דבר עם כל אחד מהם.' : 'סעו עם הטנק לשוק (הקו במפה). ערכת המבצעים בטנק — לוקחים אותה כשיורדים.'),
       pt2: () => ({ load: 'המתנות ליד הדלת של בית חב״ד — הטנק צריך להיות קרוב.', drive: 'סע לשניידר ועצור מול הכניסה. בעדינות!', meet: 'יגאל מחכה ליד הכניסה לבית החולים.' }[q('pt2').step]),
       pt3: () => (q('pt3').step === 'march' ? 'הובל את התהלוכה לבית הכנסת הגדול. לאט — שכולם יעמדו בקצב.' : 'ריקודים!'),
+      ptS: () => ({ meet: 'ר׳ יואל יושב בכיכר המתנדבים. בלי לחץ — פשוט לשבת לידו.', ride: 'הביאו את הטנק לכיכר ואספו את ר׳ יואל.', drive: 'סעו לאט לבית הכנסת הגדול, ותקשיבו לסיפורים.', done: '' }[q('ptS').step]),
     };
+    const SECRET_OFFER = () => ({
+      a: { s: 'npc', t: 'שליח, יש משהו שלא סיפרתי לך. בכיכר המתנדבים יושב כל יום זקן אחד, ר׳ יואל. נכד של מייסדי המושבה.', go: 'b' },
+      b: { s: 'npc', t: 'אין פה שעון ואין פרס. רק... תעבור לידו? סימנתי לך במפה.', c: [{ t: 'אני בדרך.', fx: startSecretPT }, { t: 'אחר כך', fx: () => (q('ptS').status = 'idle') }] },
+    });
     function mosheDialog() {
       const a = activeId();
+      if (!a && done('pt3') && (q('ptS').status === 'idle' || q('ptS').status === 'locked')) return SECRET_OFFER();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (q(a).timeLeft !== undefined ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx]();
-      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, ספר התורה — אין מילים. כשתרצה לחזור להוד השרון, בתפריט ההשהיה. ותבוא לבקר!' } };
+      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, ספר התורה' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון, בתפריט ההשהיה. ותבוא לבקר!' } };
     }
     function mosheIcon() {
       if (activeId()) return 'hint';
       const nx = nextQuest();
+      if (!nx && q('ptS').status !== 'complete') return 'mission';
       return nx && available(nx) ? 'mission' : null;
     }
 
@@ -424,6 +558,12 @@
     }
     function vanAction() {
       const a = activeId();
+      if (a === 'ptS') {
+        const st = q('ptS');
+        if (st.step === 'ride' && Math.hypot(yoel.x - van.x, yoel.z - van.z) < 8)
+          return { label: 'לאסוף את ר׳ יואל', run: () => { st.step = 'drive'; st.storyT = 10; A.door && A.door('tank'); api.toast('ר׳ יואל עלה לטנק. נוסעים לאט לבית הכנסת הגדול', 'gold'); api.save(); }, x: yoel.x, z: yoel.z };
+        if (st.step === 'drive' && vanZone(SP.zoneGreat, 11)) return { label: 'להוריד את ר׳ יואל ליד בית הכנסת', run: arriveSecretPT };
+      }
       if (a === 'pt2' && q('pt2').step === 'drive' && vanZone(SP.zoneHosp, 12))
         return {
           label: 'לפרוק את המתנות מול שניידר',
@@ -444,6 +584,7 @@
         if (done('pt1') && q('pt1').owners[o.id] === 'yes') return { a: { s: 'npc', t: 'שבת שלום, שליח! מאז שבאת — הדוכן מלא ברכה.' } };
         return { a: { s: 'npc', t: ['שלושה קילו בעשר!', 'זעתר טרי!', 'פירות העונה!', 'זיתים, חמוצים!'][OWNERS.indexOf(o)] } };
       }
+      if (n.id === 'pt_yoel') return dlgYoel();
       if (n.id === 'pt_father') {
         if (activeId() === 'pt2' && q('pt2').step === 'meet') return dlgFather();
         return { a: { s: 'npc', t: 'תודה על הביקור. נועם מחכה לך שוב.' } };
@@ -455,13 +596,15 @@
       const o = OWNERS.find((x) => x.id === n.id);
       if (o && a === 'pt1' && !q('pt1').owners[o.id]) return 'alert';
       if (n.id === 'pt_father' && a === 'pt2' && q('pt2').step === 'meet') return 'alert';
+      if (n.id === 'pt_yoel' && a === 'ptS' && q('ptS').step !== 'done') return 'star';
       return null;
     }
     function navTarget() {
       const a = activeId();
       if (a === 'pt1') {
         const st = q('pt1');
-        if (!st.bag) return trunk();
+        // הערכה בטנק: אם הטנק רחוק — קודם אליו; אחרת ישר לשוק (לוקחים אותה כשיורדים)
+        if (!st.bag && !S().inVan && Math.hypot(player.x - van.x, player.z - van.z) > 20) return trunk();
         let best = null, bd = 1e9;
         for (const o of OWNERS) {
           if (st.owners[o.id]) continue;
@@ -480,6 +623,10 @@
         return father;
       }
       if (a === 'pt3') return q('pt3').step === 'march' ? SP.zoneGreat : null;
+      if (a === 'ptS') {
+        const st = q('ptS');
+        return st.step === 'drive' ? SP.zoneGreat : st.step === 'done' ? null : yoel;
+      }
       return null;
     }
     function mapDots(dot) {
@@ -507,6 +654,9 @@
         } else if (a === 'pt2') {
           row('מתנות', st.step === 'load' ? 'ליד הדלת' : st.step === 'drive' ? 'בטנק 🚐' : '✓ בשניידר', st.step === 'meet' ? 'ok' : '');
           row('בלונים', st.intact + '/3', st.intact === 3 ? 'ok' : 'later');
+        } else if (a === 'ptS') {
+          h += '</ul><div class="tr-obj">' + HINT.ptS() + '</div>';
+          return h;
         } else if (a === 'pt3') {
           const d = Math.round(headDist());
           row('התהלוכה', st.step === 'ceremony' ? '🎉 רוקדים' : d > 24 ? 'מאחור! ' + d + ' מ׳' : 'צמודה · ' + d + ' מ׳', st.step === 'ceremony' || d <= 24 ? 'ok' : 'later');
@@ -515,7 +665,8 @@
       }
       const nx = nextQuest();
       if (nx) return '<div class="tr-title">' + TITLES[nx] + '</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד פתח תקווה <span class="ic blue">!</span></div>';
-      return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">פתח תקווה מכירה את השליח. המשך יבוא...</div>';
+      if (q('ptS').status === 'idle') return '<div class="tr-title">' + TITLES.ptS + '</div><div class="tr-obj">ר׳ יואל מחכה בכיכר. ' + MEN + ' יודע איפה.</div>';
+      return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">' + (done('ptS') ? 'גם ר׳ יואל חזר לבית הכנסת. ' : '') + 'פתח תקווה מכירה את השליח. המשך יבוא...</div>';
     }
 
     // ================= עדכון =================
@@ -551,22 +702,32 @@
         const nx = nextQuest();
         // את הפגישה הראשונה עושים פנים אל פנים, ליד בית חב״ד
         if (nx === 'pt1' && !S().flags.ptMet) return null;
+        if (!nx && q('ptS').status === 'locked') return { id: 'ptS', nodes: SECRET_OFFER() };
         return nx && available(nx) ? { id: nx, nodes: OFFER[nx]() } : null;
       },
       update(dt) {
         const a = activeId();
         for (const o of OWNERS) o.n.hidden = false;
+        updateShoppers(dt, performance.now() / 1000);
         if (a) {
           const st = q(a);
           st.elapsed += dt;
           if (st.timeLeft !== undefined) st.timeLeft -= dt;
+          // ערכת המבצעים נלקחת לבד כשיורדים מהטנק או עומדים לידו
+          if (a === 'pt1' && !st.bag && !S().inVan && Math.hypot(player.x - van.x, player.z - van.z) < 7) {
+            st.bag = true;
+            A.load && A.load();
+            api.toast('לקחתם מהטנק את ערכת המבצעים: מזוזה, תפילין, קופת צדקה ונרות שבת 🎒', 'gold');
+          }
           if (a === 'pt1' && st.timeLeft <= 0) {
             api.toast('השוק נסגר לשבת!', 'gold');
             completePt1('time');
           }
           if (a === 'pt2') pt2Update(dt);
           if (a === 'pt3') pt3Update(dt, performance.now() / 1000);
+          if (a === 'ptS') ptSUpdate(dt);
         }
+        if (a !== 'ptS') yoel.hidden = !done('ptS');
         if (a !== 'pt2') {
           father.hidden = !(q('pt2').status === 'active' && q('pt2').step === 'meet');
         }

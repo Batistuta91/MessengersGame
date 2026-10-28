@@ -18,6 +18,7 @@
     window.dispatchEvent(new ErrorEvent('error', { message: 'WebGL context lost (graphics memory) - reload the page (F5)' }));
   });
   renderer.setPixelRatio(1);
+  if (G.SMOOTH) document.body.classList.add('smooth');
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   const scene = new T.Scene();
@@ -51,15 +52,16 @@
     if (!ok) return null;
     const depthTex = new T.DepthTexture(1, 1);
     depthTex.type = T.UnsignedIntType;
-    const rt = new T.WebGLRenderTarget(1, 1, { minFilter: T.NearestFilter, magFilter: T.NearestFilter, depthTexture: depthTex, depthBuffer: true });
+    const flt = G.SMOOTH ? T.LinearFilter : T.NearestFilter;
+    const rt = new T.WebGLRenderTarget(1, 1, { minFilter: flt, magFilter: flt, depthTexture: depthTex, depthBuffer: true });
     const mat = new T.ShaderMaterial({
       uniforms: {
         tColor: { value: rt.texture }, tDepth: { value: depthTex }, res: { value: new T.Vector2(1, 1) },
-        cnear: { value: 1 }, cfar: { value: 100 }, persp: { value: 0 }, night: { value: 0 },
+        cnear: { value: 1 }, cfar: { value: 100 }, persp: { value: 0 }, night: { value: 0 }, uSmooth: { value: G.SMOOTH ? 1 : 0 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `
-        uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 res; uniform float cnear; uniform float cfar; uniform float persp; uniform float night;
+        uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 res; uniform float cnear; uniform float cfar; uniform float persp; uniform float night; uniform float uSmooth;
         varying vec2 vUv;
         float Z(vec2 uv){
           float d = texture2D(tDepth, uv).x;
@@ -68,6 +70,18 @@
         void main(){
           vec2 px = 1.0 / res;
           vec3 c = texture2D(tColor, vUv).rgb;
+          // מראה חלק, מבט מלמעלה: טשטוש ״מיניאטורה״ בחלק העליון והתחתון של המסך
+          if (uSmooth > 0.5 && persp < 0.5) {
+            float tb = smoothstep(0.2, 0.5, abs(vUv.y - 0.5)) * 3.5;
+            if (tb > 0.05) {
+              vec3 acc = c;
+              for (int i = 0; i < 12; i++) {
+                float a = float(i) * 2.399;
+                acc += texture2D(tColor, vUv + vec2(cos(a), sin(a)) * sqrt(float(i + 1) / 12.0) * tb * px).rgb;
+              }
+              c = acc / 13.0;
+            }
+          }
           float zc = Z(vUv), zn = Z(vUv + vec2(0.0, px.y)), zs = Z(vUv - vec2(0.0, px.y)), ze = Z(vUv + vec2(px.x, 0.0)), zw = Z(vUv - vec2(px.x, 0.0));
           float edge;
           if (persp > 0.5) {
@@ -78,7 +92,7 @@
           } else {
             edge = smoothstep(0.25, 0.9, zn + zs + ze + zw - 4.0 * zc);
           }
-          c *= 1.0 - 0.5 * edge;
+          c *= 1.0 - mix(0.5, 0.22, uSmooth) * edge;
           vec3 b = vec3(0.0);
           for (int i = 0; i < 8; i++) {
             float a = float(i) * 0.7853981;
@@ -89,6 +103,12 @@
           float l = dot(c, vec3(0.299, 0.587, 0.114));
           c = mix(vec3(l), c, 1.18);
           c = (c - 0.5) * 1.07 + 0.5;
+          // מראה חלק: עקומת צבע קולנועית וחום של אחר הצהריים
+          if (uSmooth > 0.5) {
+            vec3 x = c * 1.08;
+            c = mix(c, clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0), 0.65);
+            c *= mix(vec3(1.03, 1.0, 0.96), vec3(1.0), night);
+          }
           c *= mix(vec3(1.04, 1.0, 0.95), vec3(0.95, 0.98, 1.08), night);
           vec2 q = vUv - 0.5;
           c *= 1.0 - dot(q, q) * 0.6;
@@ -140,7 +160,8 @@
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     lastPixMode = isThird();
-    const pix = G.clamp(h / (lastPixMode ? 620 : 440), 1, 3);
+    // מראה חלק: רזולוציה מלאה (עד 1080 שורות); פיקסלים: תמונה קטנה שמוגדלת
+    const pix = G.SMOOTH ? G.clamp(h / 1080, 1, 2) : G.clamp(h / (lastPixMode ? 620 : 440), 1, 3);
     const rw = Math.ceil(w / pix), rh = Math.ceil(h / pix);
     renderer.setSize(rw, rh, false);
     if (post) post.setSize(rw, rh);
@@ -313,6 +334,13 @@
     addNPC(d);
   }
   if (CITY === 'pt') for (const id of TARGET_IDS) npcById[id].hidden = true;
+  // מסך הפתיחה בפרק 2
+  if (CITY === 'pt') {
+    const tc = document.querySelector('#title .credit'), tl = document.querySelector('#title .tagline'), bd = document.querySelector('#title .badge');
+    if (bd) bd.textContent = 'פרק 2 · פתח תקווה';
+    if (tl) tl.textContent = 'אם המושבות מחכה: שוק לפני שבת, ביקור חולים בשניידר, וספר תורה חדש לבית הכנסת הגדול.';
+    if (tc) tc.textContent = 'פתח תקווה · נתוני מפה: © OpenStreetMap contributors (ODbL)';
+  }
 
   // ---------- הולכי רגל ----------
   const wr = G.rng(18);
@@ -559,6 +587,16 @@
       if (c === 'Enter') $('btn-play').click();
       return;
     }
+    if (mode === 'journal') {
+      if (c === 'Escape' || c === 'Enter' || c === 'KeyP') closeJournal();
+      return;
+    }
+    if (mode === 'map') {
+      if (c === 'Escape' || c === 'KeyM' || c === 'Enter') closeBigMap();
+      else if (c === 'Equal' || c === 'NumpadAdd') bmZoom(1.3);
+      else if (c === 'Minus' || c === 'NumpadSubtract') bmZoom(1 / 1.3);
+      return;
+    }
     if (c === 'Escape' || c === 'KeyP') {
       if (mode === 'play') pauseGame();
       else if (mode === 'paused') resumeGame();
@@ -602,6 +640,7 @@
     else if (c === 'KeyN') nextSong();
     else if (c === 'KeyB') setGps('home');
     else if (c === 'KeyT') setGps('tank');
+    else if (c === 'KeyM') openBigMap();
     else if (c === 'KeyH' || c === 'KeyQ') horn();
   }
   function virtualKey(code) {
@@ -1084,8 +1123,10 @@
         cur = { kind: 'npc', ref: n, label: 'לדבר עם ' + n.def.name, x: n.x, z: n.z };
       }
     }
+    // אדם שעומד ממש לידך קודם לרכב (טנק גדול שחונה ליד דוכן לא ״גונב״ את השיחה)
+    const talkFirst = cur && cur.kind === 'npc' && best < 2.0;
     for (const v of vehicles) {
-      if (v.locked) continue;
+      if (v.locked || talkFirst) continue;
       const dv = Math.hypot(player.x - v.x, player.z - v.z) - v.P.len / 3.5;
       if (dv < 2.2 && dv < best) {
         best = dv;
@@ -1093,7 +1134,8 @@
       }
     }
     const door = W.places.chabadDoor, dd = dist(player, door);
-    if (dd < 1.8 && dd < best) {
+    // הדלת מנצחת רק אם היא קרובה בבירור יותר מאדם שעומד לידה (משה ליד הדלת)
+    if (dd < 1.8 && dd < best - (cur && cur.kind === 'npc' ? 0.4 : 0)) {
       best = dd;
       cur = { kind: 'door', label: 'כניסה לבית חב״ד', x: door.x, z: door.z };
     }
@@ -1572,8 +1614,8 @@
   }
   function renderPanel() {
     const nextLv = S.chabadLevel + 1;
-    const canUp = (nextLv === 2 && S.mission.status === 'complete') || (nextLv === 3 && M.canUpgrade(3));
-    const lockText = { 2: 'נפתח אחרי השלמת משימה 1', 3: 'נפתח אחרי משימה 4, ״האור הגדול״' };
+    const canUp = (nextLv === 2 && S.mission.status === 'complete') || (nextLv === 3 && M.canUpgrade(3)) || (nextLv === 4 && M.canUpgrade(4));
+    const lockText = { 2: 'נפתח אחרי השלמת משימה 1', 3: 'נפתח אחרי משימה 4, ״האור הגדול״', 4: 'נפתח אחרי פרק 2 בפתח תקווה' };
     let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div><ol class="levels">';
     LEVELS.forEach((L, i) => {
       const n = i + 1;
@@ -1591,6 +1633,17 @@
     if (b) b.addEventListener('click', upgradeChabad);
   }
   function upgradeChabad() {
+    if (S.chabadLevel === 3 && M.canUpgrade(4)) {
+      S.chabadLevel = 4;
+      W.setChabadLevel(4);
+      addJoy(15);
+      A.success();
+      A.cheer && A.cheer();
+      toast('🏛 מרכז השליחות הגדול! חזית בהשראת 770 — הבית של כל השלוחים', 'gold');
+      save();
+      renderPanel();
+      return;
+    }
     if (S.chabadLevel === 2 && M.canUpgrade(3)) {
       S.chabadLevel = 3;
       W.setChabadLevel(3);
@@ -1619,11 +1672,55 @@
     mode = 'play';
   }
   $('panel-close').addEventListener('click', closePanel);
+  // ================= יומן השליחות: כל ההתקדמות במקום אחד =================
+  function journalHTML() {
+    const Q = S.quests || {};
+    const stOf = (id) => (Q[id] && Q[id].status) || 'locked';
+    const MARK = { complete: ['✓', 'ok'], active: ['▶ עכשיו', 'later'], failed: ['↺ שוב', 'later'], idle: ['מחכה', ''], calling: ['מחכה', ''], locked: ['🔒', 'no'] };
+    const row = (label, s, secret) => {
+      const m = MARK[s] || MARK.locked;
+      const name = secret && s === 'locked' ? '✦ משימה סודית ???' : label;
+      return '<li class="' + m[1] + '"><span>' + name + '</span><em>' + m[0] + '</em></li>';
+    };
+    const pages = (c, n) => ((S.collect && S.collect[c]) || []).length + '/' + n;
+    let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div>';
+    h += '<h3 class="jr-h">פרק 1 · הוד השרון</h3><ul class="jr-list">';
+    h += row('משימה 1 · ״רק חמש דקות״', S.mission.status === 'complete' ? 'complete' : S.mission.status === 'active' ? 'active' : 'idle');
+    h += row('משימה 2 · ״איפה המניין?״', stOf('m2')) + row('משימה 3 · ״בלי קבלה״', stOf('m3')) + row('משימה 4 · ״האור הגדול״', stOf('m4'));
+    h += row('✦ ״השליח שלא מוותר״', stOf('secret'), true);
+    h += '<li><span>📜 דפי תניא</span><em>' + pages('hod', 12) + '</em></li>';
+    h += '<li><span>🏠 בית חב״ד</span><em>' + LEVELS[Math.min(LEVELS.length, S.chabadLevel) - 1].name + '</em></li></ul>';
+    const ptOpen = S.flags.ptUnlocked || CITY === 'pt';
+    h += '<h3 class="jr-h">פרק 2 · פתח תקווה</h3>';
+    if (!ptOpen) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
+    else {
+      h += '<ul class="jr-list">';
+      h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״ספר תורה לבית הכנסת הגדול״', stOf('pt3'));
+      h += row('✦ ״הנכד של המייסדים״', stOf('ptS'), true);
+      h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li></ul>';
+    }
+    return h;
+  }
+  function openJournal() {
+    show($('pause'), false);
+    $('journal-body').innerHTML = journalHTML();
+    show($('journal'), true);
+    mode = 'journal';
+    A.click();
+  }
+  function closeJournal() {
+    show($('journal'), false);
+    show($('pause'), true);
+    mode = 'paused';
+  }
+  $('p-journal').addEventListener('click', openJournal);
+  $('journal-close').addEventListener('click', closeJournal);
 
   // ================= השהיה, הגדרות, התחלה מחדש =================
   function refreshSettingsLabels() {
     $('p-sound').textContent = 'צליל: ' + (S.settings.sound ? 'פועל' : 'כבוי');
     $('p-shadows').textContent = 'גרפיקה: ' + (S.settings.shadows ? 'מלאה' : 'חסכונית');
+    $('p-look').textContent = 'מראה: ' + (G.SMOOTH ? 'חלק (חדש)' : 'פיקסלים');
     $('p-voice').textContent = 'קולות דמויות: ' + (S.settings.voice !== false ? 'פועלים' : 'כבויים');
     if (G.voice) {
       G.voice.enabled = S.settings.voice !== false && S.settings.sound;
@@ -1648,6 +1745,35 @@
     if (drv && S.radio === A.KOL) A.kol(true);
   }
   $('p-resume').addEventListener('click', resumeGame);
+  // גיבוי ושחזור של השמירה (קובץ) — גם כדי להעביר התקדמות בין מחשב לטלפון
+  $('p-backup').addEventListener('click', () => {
+    save();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' }));
+    a.download = 'shluchim-save-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast('💾 קובץ הגיבוי ירד. אפשר לשחזר אותו גם במכשיר אחר', 'gold');
+  });
+  const restoreIn = document.createElement('input');
+  restoreIn.type = 'file';
+  restoreIn.accept = '.json,application/json';
+  restoreIn.addEventListener('change', () => {
+    const file = restoreIn.files && restoreIn.files[0];
+    restoreIn.value = '';
+    if (!file) return;
+    file.text().then((txt) => {
+      const d = JSON.parse(txt);
+      if (!d || d.v !== 1 || !d.mission) throw new Error('bad save');
+      resetting = true;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+      toast('📂 השמירה שוחזרה — טוען מחדש...', 'gold');
+      setTimeout(() => location.replace(location.pathname + location.hash), 900);
+    }).catch(() => toast('הקובץ הזה לא נראה כמו שמירה של המשחק'));
+  });
+  $('p-restore').addEventListener('click', () => restoreIn.click());
   $('p-unstick').addEventListener('click', () => {
     const ps = SPOT.playerStart || { x: -12, z: -6.6, rot: 0 }, vs = SPOT.vanStart || { x: -12, z: -2, h: 0 };
     if (drv) {
@@ -1671,6 +1797,14 @@
     A.setEnabled(S.settings.sound);
     refreshSettingsLabels();
     save();
+  });
+  // החלפת מראה: הטקסטורות נבנות בטעינה, אז טוענים מחדש
+  $('p-look').addEventListener('click', () => {
+    S.settings.look = G.SMOOTH ? 'pixel' : 'smooth';
+    save();
+    resetting = true;
+    toast('טוען מחדש במראה ' + (G.SMOOTH ? 'פיקסלים' : 'חלק') + '...', 'gold');
+    setTimeout(() => location.reload(), 500);
   });
   $('p-voice').addEventListener('click', () => {
     S.settings.voice = S.settings.voice === false;
@@ -1705,10 +1839,10 @@
   });
 
   // ================= מסך פתיחה =================
-  if (saved) {
-    $('btn-play').textContent = 'המשך מהשמירה';
-    show($('btn-new'), true);
-  }
+  // העיר נבנתה — הכפתור (שהציג ״טוען״) מוכן ללחיצה
+  $('btn-play').disabled = false;
+  $('btn-play').textContent = saved ? 'המשך מהשמירה' : 'שחקו בדמו';
+  if (saved) show($('btn-new'), true);
   $('btn-play').addEventListener('click', () => {
     initAudioOnce();
     startPlay();
@@ -1766,19 +1900,30 @@
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
   EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t) }) : null;
+  // דפי תניא נסתרים בעיר
+  const CL = G.makeCollectibles ? G.makeCollectibles({ scene, W, A, player, get S() { return S; }, toast, addJoy, addCommunity, save }) : null;
   resize();
 
   // ================= מיני־מפה =================
   // מפה עגולה שמסתובבת עם המצלמה (כמו במשחקי עולם פתוח); המפה הסטטית בקואורדינטות עולם
   const mm = $('minimap'), mmx = mm.getContext('2d'), MM = mm.width;
-  const MEXT = W.mapExtent || 85, MPX = W.drawMap ? Math.min(1.2, 4096 / (2 * MEXT)) : 3;
+  // עיר גדולה: המפה נבנית לאזור של 1.4 ק״מ סביב השחקן (חדה), ומתחדשת כשמתרחקים
+  const MEXT = W.mapExtent || 85, BIGMAP = !!W.drawMap && MEXT > 900, RG = 700;
+  const MPX = W.drawMap ? (BIGMAP ? 1.2 : Math.min(1.2, 4096 / (2 * MEXT))) : 3;
+  let mmCx = 0, mmCz = 0;
   let MVIEW = 52;
   let mmStatic = null, mmScale = 1;
   function buildMinimapStatic() {
     if (W.drawMap) {
       const c = document.createElement('canvas');
-      c.width = c.height = Math.round(2 * MEXT * MPX);
-      W.drawMap(c.getContext('2d'), MPX, MEXT);
+      c.width = c.height = Math.round(2 * (BIGMAP ? RG : MEXT) * MPX);
+      const g2 = c.getContext('2d');
+      if (BIGMAP) {
+        mmCx = drv ? drv.x : player.x;
+        mmCz = drv ? drv.z : player.z;
+        g2.translate(-(mmCx - RG + MEXT) * MPX, -(mmCz - RG + MEXT) * MPX);
+      }
+      W.drawMap(g2, MPX, MEXT, BIGMAP ? { x1: mmCx - RG - 20, z1: mmCz - RG - 20, x2: mmCx + RG + 20, z2: mmCz + RG + 20 } : null);
       mmStatic = c;
       W.mapDirty = false;
       return;
@@ -1836,7 +1981,7 @@
     }
   }
   function drawMinimap() {
-    if (!mmStatic || W.mapDirty) buildMinimapStatic();
+    if (!mmStatic || W.mapDirty || (BIGMAP && Math.hypot((drv ? drv.x : player.x) - mmCx, (drv ? drv.z : player.z) - mmCz) > 380)) buildMinimapStatic();
     const C = MM / 2, R = C - 2;
     if (W.city) MVIEW = G.lerp(MVIEW, drv ? (drv.type === 'bike' ? 110 : 170) : 95, 0.08);
     mmScale = R / MVIEW;
@@ -1855,7 +2000,8 @@
     mmx.scale(mmScale, mmScale);
     mmx.translate(-px, -pz);
     mmx.imageSmoothingEnabled = false;
-    mmx.drawImage(mmStatic, -MEXT, -MEXT, 2 * MEXT, 2 * MEXT);
+    if (BIGMAP) mmx.drawImage(mmStatic, mmCx - RG, mmCz - RG, 2 * RG, 2 * RG);
+    else mmx.drawImage(mmStatic, -MEXT, -MEXT, 2 * MEXT, 2 * MEXT);
     // מסלול ה-GPS: קו צבעוני לאורך הרחובות, עם שוליים כהים כמו ב-GTA
     if (gps.route && gps.route.length > 1) {
       mmx.lineJoin = mmx.lineCap = 'round';
@@ -2033,7 +2179,7 @@
   function updateHUD() {
     ui.joyFill.style.width = S.joy + '%';
     setText(ui.joyVal, String(Math.round(S.joy)));
-    setHTML(ui.stats, '<span>🤝 <b>' + S.community + '</b></span><span>🙋 <b>' + S.volunteers + '</b></span><span>🏠 <b>' + S.chabadLevel + '</b></span>');
+    setHTML(ui.stats, '<span>🤝 <b>' + S.community + '</b></span><span>🙋 <b>' + S.volunteers + '</b></span><span>🏠 <b>' + S.chabadLevel + '</b></span>' + (CL ? '<span title="דפי תניא נסתרים">📜 <b>' + CL.found + '/' + CL.total + '</b></span>' : ''));
     setHTML(ui.tracker, trackerHTML());
     const hh = Math.floor(S.time), mi = Math.floor((S.time - hh) * 60);
     setHTML(ui.clock, String(hh).padStart(2, '0') + ':' + String(mi).padStart(2, '0') + '<small>' + periodName(S.time) + '</small>');
@@ -2097,21 +2243,8 @@
     }
   }
   // בעיר גדולה: הולך רגל שנשאר רחוק עובר למדרכה קרובה לשחקן (מחוץ לטווח הראייה)
-  let walkerMoveT = 0, pathGrid = null;
-  // אינדקס מדרכות לפי משבצות של 200 מטר
-  function pathsNear(x, z) {
-    if (!pathGrid) {
-      pathGrid = new Map();
-      for (const p of W.paths) {
-        const m = p.pts[(p.pts.length / 2) | 0], k = Math.floor(m[0] / 200) + ',' + Math.floor(m[1] / 200);
-        if (!pathGrid.has(k)) pathGrid.set(k, []);
-        pathGrid.get(k).push(p);
-      }
-    }
-    const out = [], cx = Math.floor(x / 200), cz = Math.floor(z / 200);
-    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) out.push(...(pathGrid.get(cx + i + ',' + (cz + j)) || []));
-    return out;
-  }
+  let walkerMoveT = 0;
+  const pathsNear = (x, z) => W.pathsNear(x, z);
   function relocateWalkers(dt) {
     if (!W.paths || !W.paths.length || (walkerMoveT -= dt) > 0) return;
     walkerMoveT = 2;
@@ -2168,6 +2301,7 @@
   const gps = { dest: null, route: null, color: '#b07cff', t: 0, hintT: 40 };
   function gpsTarget() {
     if (gps.dest === 'home') return W.places.chabadDoor;
+    if (gps.dest === 'point') return gps.point;
     if (gps.dest === 'tank') return van;
     return nearestPending();
   }
@@ -2195,7 +2329,7 @@
     }
     const t = gpsTarget();
     if (gps.dest && t && Math.hypot(t.x - px, t.z - pz) < 9) {
-      toast(gps.dest === 'home' ? 'הגעתם לבית חב״ד 🏠' : 'הנה טנק המבצעים! 🚐', 'gold');
+      toast(gps.dest === 'home' ? 'הגעתם לבית חב״ד 🏠' : gps.dest === 'point' ? 'הגעתם ליעד 📍' : 'הנה טנק המבצעים! 🚐', 'gold');
       gps.dest = null;
       refreshGpsBtns();
     }
@@ -2218,6 +2352,215 @@
       gps.route = W.route(px, pz, t.x, t.z);
     } else if (gps.route) gps.route[0] = [px, pz];
   }
+  // ================= מפה גדולה (M): כל העיר, יעדים, ונקודת ציון בלחיצה =================
+  const bm = $('bigmap'), bmc = $('bigmap-c'), bmx = bmc.getContext('2d');
+  let bmImg = null, bmImgS = 1, bmv = null;
+  const bmPos = () => (drv ? { x: drv.x, z: drv.z } : { x: player.x, z: player.z });
+  function openBigMap() {
+    if (!W.drawMap || (mode !== 'play' && mode !== 'paused')) return;
+    if (mode === 'paused') show($('pause'), false);
+    mode = 'map';
+    show(bm, true);
+    A.click();
+    if (!bmImg) {
+      // תמונה של כל העיר לזום רחוק; בזום קרוב מציירים מחדש רק את האזור הנראה
+      const size = Math.min(2048, Math.round(2 * MEXT * 1.2));
+      bmImgS = size / (2 * MEXT);
+      bmImg = document.createElement('canvas');
+      bmImg.width = bmImg.height = size;
+      W.drawMap(bmImg.getContext('2d'), bmImgS, MEXT);
+    }
+    const p = bmPos();
+    bmv = { cx: p.x, cz: p.z, s: 0, moved: 0 };
+    sizeBigMap();
+    bmv.s = Math.max(fitScale(), Math.min(1.2, bmc.height / 900));
+    drawBigMap();
+  }
+  function closeBigMap() {
+    show(bm, false);
+    mode = 'play';
+  }
+  function fitScale() {
+    return Math.min(bmc.width, bmc.height) / (2 * MEXT);
+  }
+  function sizeBigMap() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    bmc.width = Math.round(window.innerWidth * dpr);
+    bmc.height = Math.round(window.innerHeight * dpr);
+  }
+  const w2s = (x, z) => [bmc.width / 2 + (x - bmv.cx) * bmv.s, bmc.height / 2 + (z - bmv.cz) * bmv.s];
+  const s2w = (sx, sz) => [bmv.cx + (sx - bmc.width / 2) / bmv.s, bmv.cz + (sz - bmc.height / 2) / bmv.s];
+  function bmMarker(x, z, txt, bg, size) {
+    const [sx, sz] = w2s(x, z), r = (size || 16) * (bmc.width > 1600 ? 1.4 : 1);
+    bmx.beginPath();
+    bmx.arc(sx, sz, r, 0, Math.PI * 2);
+    bmx.fillStyle = bg;
+    bmx.fill();
+    bmx.lineWidth = 3;
+    bmx.strokeStyle = '#13213f';
+    bmx.stroke();
+    bmx.font = Math.round(r * 1.1) + 'px sans-serif';
+    bmx.textAlign = 'center';
+    bmx.textBaseline = 'middle';
+    bmx.fillText(txt, sx, sz + 1);
+  }
+  function drawBigMap() {
+    if (!bmv) return;
+    const Wd = bmc.width, Hd = bmc.height;
+    bmx.setTransform(1, 0, 0, 1, 0, 0);
+    bmx.fillStyle = '#7f8c55';
+    bmx.fillRect(0, 0, Wd, Hd);
+    bmx.save();
+    bmx.translate(Wd / 2, Hd / 2);
+    bmx.scale(bmv.s, bmv.s);
+    bmx.translate(-bmv.cx, -bmv.cz);
+    if (bmv.s <= bmImgS * 1.6) {
+      bmx.imageSmoothingEnabled = true;
+      bmx.drawImage(bmImg, -MEXT, -MEXT, 2 * MEXT, 2 * MEXT);
+    } else {
+      const hw = Wd / 2 / bmv.s + 20, hh = Hd / 2 / bmv.s + 20;
+      bmx.save();
+      bmx.translate(-MEXT, -MEXT);
+      W.drawMap(bmx, 1, MEXT, { x1: bmv.cx - hw, z1: bmv.cz - hh, x2: bmv.cx + hw, z2: bmv.cz + hh });
+      bmx.restore();
+    }
+    // מסלול ה-GPS
+    if (gps.route && gps.route.length > 1) {
+      bmx.lineJoin = bmx.lineCap = 'round';
+      for (const [w, c] of [[10, 'rgba(10,14,30,0.6)'], [6, gps.color]]) {
+        bmx.strokeStyle = c;
+        bmx.lineWidth = w / bmv.s;
+        bmx.beginPath();
+        bmx.moveTo(gps.route[0][0], gps.route[0][1]);
+        for (const q of gps.route) bmx.lineTo(q[0], q[1]);
+        bmx.stroke();
+      }
+    }
+    bmx.restore();
+    // שמות מקומות
+    bmx.font = 'bold ' + (Wd > 1600 ? 22 : 15) + 'px Rubik, Arial, sans-serif';
+    bmx.textAlign = 'center';
+    for (const pl of W.places) {
+      if (!pl.he || pl.r < 8) continue;
+      const [sx, sz] = w2s(pl.x, pl.z);
+      if (sx < -50 || sz < -50 || sx > Wd + 50 || sz > Hd + 50) continue;
+      bmx.lineWidth = 4;
+      bmx.strokeStyle = 'rgba(19,33,63,0.85)';
+      bmx.strokeText(pl.he, sx, sz - 26);
+      bmx.fillStyle = '#ffffff';
+      bmx.fillText(pl.he, sx, sz - 26);
+    }
+    // סמנים: יעד המשימה, בית חב״ד, הטנק, נקודת ציון, ואתם
+    const tgt = nearestPending();
+    if (tgt) bmMarker(tgt.x, tgt.z, '★', '#b07cff', 15);
+    const ch = W.places.chabadDoor;
+    if (ch) bmMarker(ch.x, ch.z, '🏠', '#3b6fd8', 16);
+    if (drv !== van) bmMarker(van.x, van.z, '🚐', '#ffd23f', 15);
+    if (gps.dest === 'point' && gps.point) bmMarker(gps.point.x, gps.point.z, '📍', '#ffffff', 16);
+    const p = bmPos(), [px, pz] = w2s(p.x, p.z);
+    const hd = drv ? drv.h : player.rot, R = Wd > 1600 ? 18 : 13;
+    bmx.save();
+    bmx.translate(px, pz);
+    bmx.rotate(-hd + Math.PI);
+    bmx.beginPath();
+    bmx.moveTo(0, -R);
+    bmx.lineTo(R * 0.75, R * 0.8);
+    bmx.lineTo(0, R * 0.4);
+    bmx.lineTo(-R * 0.75, R * 0.8);
+    bmx.closePath();
+    bmx.fillStyle = '#ffffff';
+    bmx.fill();
+    bmx.lineWidth = 3;
+    bmx.strokeStyle = '#13213f';
+    bmx.stroke();
+    bmx.restore();
+  }
+  function bmZoom(f, sx, sz) {
+    const [wx, wz] = s2w(sx === undefined ? bmc.width / 2 : sx, sz === undefined ? bmc.height / 2 : sz);
+    bmv.s = G.clamp(bmv.s * f, fitScale() * 0.9, 4);
+    const [nx, nz] = s2w(sx === undefined ? bmc.width / 2 : sx, sz === undefined ? bmc.height / 2 : sz);
+    bmv.cx += wx - nx;
+    bmv.cz += wz - nz;
+    drawBigMap();
+  }
+  // גרירה, צביטה ולחיצה (עכבר ומגע)
+  const bmPtr = new Map();
+  let bmPinch = 0;
+  const dprOf = () => bmc.width / window.innerWidth;
+  bmc.addEventListener('pointerdown', (e) => {
+    bmc.setPointerCapture(e.pointerId);
+    bmPtr.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    bmv.moved = 0;
+    if (bmPtr.size === 2) {
+      const [a, b] = [...bmPtr.values()];
+      bmPinch = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  });
+  bmc.addEventListener('pointermove', (e) => {
+    const p = bmPtr.get(e.pointerId);
+    if (!p || !bmv) return;
+    const k = dprOf();
+    if (bmPtr.size === 1) {
+      bmv.cx -= ((e.clientX - p.x) * k) / bmv.s;
+      bmv.cz -= ((e.clientY - p.y) * k) / bmv.s;
+      bmv.moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y);
+    }
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (bmPtr.size === 2) {
+      const [a, b] = [...bmPtr.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (bmPinch > 0) bmZoom(d / bmPinch, ((a.x + b.x) / 2) * k, ((a.y + b.y) / 2) * k);
+      bmPinch = d;
+      bmv.moved += 99;
+    }
+    drawBigMap();
+  });
+  const bmUp = (e) => {
+    const p = bmPtr.get(e.pointerId);
+    bmPtr.delete(e.pointerId);
+    if (bmPtr.size < 2) bmPinch = 0;
+    if (!p || !bmv || bmv.moved > 8 || bmPtr.size) return;
+    // לחיצה: נקודת ציון (לחיצה על הנקודה הקיימת מבטלת אותה)
+    const k = dprOf(), [wx, wz] = s2w(e.clientX * k, e.clientY * k);
+    if (gps.dest === 'point' && gps.point && Math.hypot(gps.point.x - wx, gps.point.z - wz) * bmv.s < 30) {
+      gps.dest = null;
+      toast('📍 נקודת הציון בוטלה');
+    } else {
+      gps.dest = 'point';
+      gps.point = { x: wx, z: wz };
+      toast('📍 נקבע יעד — עקבו אחרי הקו הצהוב', 'gold');
+    }
+    gps.t = 0;
+    refreshGpsBtns();
+    A.click();
+    updateGps(0.01);
+    drawBigMap();
+  };
+  bmc.addEventListener('pointerup', bmUp);
+  bmc.addEventListener('pointercancel', (e) => bmPtr.delete(e.pointerId));
+  bmc.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const k = dprOf();
+    bmZoom(e.deltaY < 0 ? 1.18 : 1 / 1.18, e.clientX * k, e.clientY * k);
+  }, { passive: false });
+  $('bm-zin').addEventListener('click', () => bmZoom(1.4));
+  $('bm-zout').addEventListener('click', () => bmZoom(1 / 1.4));
+  $('bm-me').addEventListener('click', () => {
+    const p = bmPos();
+    bmv.cx = p.x;
+    bmv.cz = p.z;
+    drawBigMap();
+  });
+  $('bm-close').addEventListener('click', closeBigMap);
+  $('gps-map').addEventListener('click', openBigMap);
+  window.addEventListener('resize', () => {
+    if (mode === 'map') {
+      sizeBigMap();
+      drawBigMap();
+    }
+  });
+
   $('gps-home').addEventListener('click', () => setGps('home'));
   $('gps-tank').addEventListener('click', () => setGps('tank'));
 
@@ -2359,6 +2702,7 @@
     for (const v of vehicles) v.hornCd -= dt;
     updateGps(dt);
     if (EV) EV.update(dt, S.mission.status === 'active' || !!M.activeQuest() || mode !== 'play');
+    if (CL) CL.update(dt, t);
     A.ambience(dt, Math.max(0, lastNight), !!W.city, TR ? TR.nearby / 4 : 0);
     const m = S.mission;
     if (m.status === 'active') {
@@ -2717,7 +3061,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; },
       player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 

@@ -1093,11 +1093,75 @@
         sign('מרכז קהילתי חב״ד', 7.5, 1.4, 0, chH + 4.3, -0.5, { w: 160, h: 30, size: 19, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L3);
         makeLights([-fw, 6.8, 0.2], [fw, 6.8, 0.2], 12, L3);
       }
+      // דרגה 4: חזית בהשראת 770 — לבנים אדומות, פסים לבנים, חלונות קשתיים ושלושה גמלונים מדורגים
+      const L4 = new T.Group();
+      L4.visible = false;
+      chG.add(L4);
+      {
+        const fw4 = Math.max(9, Math.min(CH.w + 1.5, 15)), fh = chH + 3.2 + 1.2;
+        const brick = G.canvasTex(32, 32, (g) => {
+          g.fillStyle = '#8e3b2c';
+          g.fillRect(0, 0, 32, 32);
+          for (let y = 0; y < 32; y += 4)
+            for (let x = 0; x < 32; x += 8) {
+              const ox = (y / 4) % 2 ? 4 : 0;
+              g.fillStyle = ['#9a4232', '#86372a', '#a1493a', '#8e3b2c'][((x + y) / 4) % 4];
+              g.fillRect(x + ox, y, 7, 3);
+            }
+          g.fillStyle = '#c9b8a6';
+          for (let y = 3; y < 32; y += 4) g.fillRect(0, y, 32, 1);
+        }, true);
+        brick.repeat.set(fw4 / 2.5, fh / 2.5);
+        const brickMat = lam(0xffffff, { map: brick });
+        const white = lam(0xf2ede4), dark = lam(0x1d2733);
+        boxMesh(fw4, fh, 0.5, brickMat, 0, fh / 2, 0.28, L4);
+        // פסים לבנים בין הקומות וכרכוב
+        for (const y of [3.4, 6.6, fh - 0.15]) boxMesh(fw4 + 0.3, 0.3, 0.7, white, 0, y, 0.32, L4);
+        // שלושה גמלונים מדורגים (האמצעי גבוה יותר)
+        const gable = (cx, w, h) => {
+          const steps = 4;
+          for (let k = 0; k < steps; k++) {
+            const sw = w * (1 - k / steps), sh = h / steps;
+            boxMesh(sw, sh, 0.5, brickMat, cx, fh + sh * (k + 0.5), 0.28, L4);
+            boxMesh(sw + 0.2, 0.18, 0.62, white, cx, fh + sh * (k + 1), 0.3, L4);
+          }
+        };
+        gable(0, fw4 * 0.34, 3.4);
+        gable(-fw4 * 0.33, fw4 * 0.24, 2.4);
+        gable(fw4 * 0.33, fw4 * 0.24, 2.4);
+        // חלונות קשתיים: שלוש קומות
+        const cols = Math.max(3, Math.min(5, Math.floor(fw4 / 2.6)));
+        for (let r = 0; r < 3; r++)
+          for (let k = 0; k < cols; k++) {
+            const x = (k - (cols - 1) / 2) * (fw4 / cols), y = 1.9 + r * 3.2;
+            if (r === 0 && Math.abs(x) < 2.2) continue;
+            boxMesh(1.1, 1.6, 0.1, white, x, y, 0.56, L4);
+            boxMesh(0.85, 1.35, 0.12, dark, x, y - 0.05, 0.58, L4);
+            const arch = new T.Mesh(new T.CylinderGeometry(0.55, 0.55, 0.1, 12, 1, false, -Math.PI / 2, Math.PI), white);
+            arch.rotation.x = Math.PI / 2;
+            arch.position.set(x, y + 0.8, 0.56);
+            L4.add(arch);
+          }
+        // שלוש דלתות כניסה קשתיות ומדרגות
+        for (const x of [-1.3, 0, 1.3]) {
+          boxMesh(1.0, 2.3, 0.12, lam(0x5a3a1a), x, 1.15, 0.58, L4);
+          const da = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.12, 12, 1, false, -Math.PI / 2, Math.PI), lam(0x5a3a1a));
+          da.rotation.x = Math.PI / 2;
+          da.position.set(x, 2.3, 0.58);
+          L4.add(da);
+        }
+        boxMesh(4.6, 0.18, 1.0, lam(0xbdb6aa), 0, 0.09, 0.9, L4);
+        boxMesh(4.2, 0.18, 0.6, lam(0xc9c2b6), 0, 0.27, 0.75, L4);
+        sign('770', 2.0, 0.8, 0, 3.0, 0.62, { w: 64, h: 26, size: 20, bg: '#f2ede4', fg: '#1b3a8a', border: '#1b3a8a', lit: true }, L4);
+        sign('מרכז השליחות', 4.4, 0.7, 0, fh + 4.2, 0.6, { w: 128, h: 24, size: 15, bg: '#1b3a8a', fg: '#ffd23f', border: '#ffd23f', lit: true }, L4);
+        makeLights([-fw4 / 2, fh + 0.2, 0.7], [fw4 / 2, fh + 0.2, 0.7], 18, L4, 0.2);
+      }
       let l2Applied = false;
       W.setChabadLevel = function (l) {
         L2.visible = l >= 2;
         L2roof.visible = l === 2;
         L3.visible = l >= 3;
+        L4.visible = l >= 4;
         if (l >= 2 && !l2Applied) {
           l2Applied = true;
           circLocal(CH, 2.0, 2.4, 1.2);
@@ -1660,7 +1724,7 @@
           addD(x, z, { w: 0.34, h: 0.24, d: 0.04, x: px, y: 1.9, z: pz, ry, c: '#1f5fbf' });
         }
         // מרפסות בבנייני דירות
-        if (b.levels >= 3 && !b.office) {
+        if (b.levels >= 3 && !b.office && !b.used) {
           const rail = pk(RAILS);
           for (const e of b.edges) {
             if (e.L < 6.5) continue;
@@ -1721,7 +1785,8 @@
     }
     // all=true: בונים מיד את כל מה שבטווח (בטעינה ובקפיצה למקום אחר)
     W.stream = function (x, z, all) {
-      let budget = all ? 1e9 : 3;
+      // בזמן משחק: אריח אחד בכל קריאה (עד ~10 בשנייה) — בלי קפיצות בקצב התמונה
+      let budget = all ? 1e9 : 1;
       const cand = [];
       for (const t of tiles.values()) {
         const d = Math.hypot(t.cx - x, t.cz - z);
@@ -1757,8 +1822,41 @@
       }
     }
 
+    // מדרכות קרובות לנקודה (אינדקס במשבצות של 200 מטר) — לאירועים ולהולכי רגל בעיר גדולה
+    let pathGrid = null;
+    W.pathsNear = function (x, z) {
+      if (!pathGrid) {
+        pathGrid = new Map();
+        for (const p of W.paths) {
+          const m = p.pts[(p.pts.length / 2) | 0], k = Math.floor(m[0] / 200) + ',' + Math.floor(m[1] / 200);
+          if (!pathGrid.has(k)) pathGrid.set(k, []);
+          pathGrid.get(k).push(p);
+        }
+      }
+      const out = [], cx = Math.floor(x / 200), cz = Math.floor(z / 200);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const a = pathGrid.get(cx + i + ',' + (cz + j));
+        if (a) for (const p of a) out.push(p);
+      }
+      return out;
+    };
+
     // ================= מפה ושמות מקומות =================
-    W.drawMap = function (g, S, E) {
+    // box (לא חובה): מציירים רק מה שבתוך התחום — למפה אזורית בעיר גדולה
+    W.drawMap = function (g, S, E, box) {
+      const inBox = (x1, z1, x2, z2) => !box || !(x2 < box.x1 || x1 > box.x2 || z2 < box.z1 || z1 > box.z2);
+      const polyIn = (p) => {
+        if (!box) return true;
+        let a = 1e9, b = -1e9, c = 1e9, d = -1e9;
+        for (let i = 0; i < p.length; i += 2) {
+          if (p[i] < a) a = p[i];
+          if (p[i] > b) b = p[i];
+          if (p[i + 1] < c) c = p[i + 1];
+          if (p[i + 1] > d) d = p[i + 1];
+        }
+        return inBox(a, c, b, d);
+      };
+      const roadIn = (r) => !box || r.pts.some((p) => inBox(p[0], p[1], p[0], p[1])) || inBox(Math.min(r.pts[0][0], r.pts[r.pts.length - 1][0]), Math.min(r.pts[0][1], r.pts[r.pts.length - 1][1]), Math.max(r.pts[0][0], r.pts[r.pts.length - 1][0]), Math.max(r.pts[0][1], r.pts[r.pts.length - 1][1]));
       const X = (x) => (x + E) * S, Z = (z) => (z + E) * S;
       g.fillStyle = '#8f9d63';
       g.fillRect(0, 0, 2 * E * S, 2 * E * S);
@@ -1777,13 +1875,14 @@
       };
       for (const a of areaPolys) {
         const st = AREA_STYLE[a.k];
-        if (st) poly(a.p, st[0]);
+        if (st && polyIn(a.p)) poly(a.p, st[0]);
       }
       g.lineCap = 'round';
       g.lineJoin = 'round';
       for (const pass of ['walk', 'road']) {
         for (const r of roads) {
           if (pass === 'walk' && r.cls === 'path') continue;
+          if (!roadIn(r)) continue;
           g.strokeStyle = pass === 'walk' ? '#c9c1b2' : r.cls === 'major' ? '#f2f2f2' : r.cls === 'path' ? '#d8cdb5' : '#e2e2e2';
           g.lineWidth = (pass === 'walk' ? r.w + 5 : r.w) * S;
           g.beginPath();
@@ -1792,7 +1891,7 @@
           g.stroke();
         }
       }
-      for (const b of B) poly(b.p, b.office ? '#9fb1c2' : '#c9b99d', 'rgba(60,50,40,0.5)');
+      for (const b of B) if (inBox(b.minx, b.minz, b.maxx, b.maxz)) poly(b.p, b.office ? '#9fb1c2' : '#c9b99d', 'rgba(60,50,40,0.5)');
       poly(chB.p, '#3b6fd8', '#ffd23f');
     };
     W.locationName = function (x, z) {
