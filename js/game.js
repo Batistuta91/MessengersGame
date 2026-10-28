@@ -887,6 +887,20 @@
     // נהג אוטומטי (למשל הניידת של ברסלב): השחקן נוסע כנוסע
     if (v.auto) {
       const c = v.auto(dt, v);
+      // נהג אוטומטי ״קינמטי״: הרכב נע לאורך המסלול בלי פיזיקה ובלי התנגשויות — נסיעה חלקה
+      if (c.kin) {
+        v.x = c.kin.x;
+        v.z = c.kin.z;
+        v.h = c.kin.h;
+        v.v = c.kin.v;
+        v.steer = 0;
+        v.lean = 0;
+        for (const w of v.m.wheels) w.rotation.x += (v.v * dt) / v.P.wheelR;
+        player.x = v.x;
+        player.z = v.z;
+        player.rot = v.h;
+        return;
+      }
       throttle = c.throttle;
       steer = c.steer;
       brake = !!c.brake;
@@ -983,7 +997,12 @@
     player.p.group.visible = !v.P.hide;
     tp.yaw = v.h;
     A.door(v.type);
-    if (v.type === 'bike') {
+    if (v.type === 'breslev') {
+      // בניידת של ברסלב: רק השיר שלהם (מהרמקול)
+      S.radio = 0;
+      A.setStation(0);
+      A.kol(false);
+    } else if (v.type === 'bike') {
       // באופניים אין רדיו
       S.radio = 0;
       A.setStation(0);
@@ -1150,8 +1169,12 @@
   }
   const GREETS = ['בוקר טוב!', 'שבוע טוב, רבי!', 'איזה יום יפה היום', 'אה, השליח החדש! ברוך הבא לשכונה', 'תמסור ד״ש למשה!', 'ראיתי את הטנק שלך — אחלה ניגונים', 'שיהיה לך יום מוצלח!', 'שבת שלום מראש!'];
   function interact() {
-    if (drv && drv.auto) {
+    if (drv && drv.auto && !drv.canExit) {
       toast(drv.autoMsg || 'נוסעים! יורדים בעצירה הבאה');
+      return;
+    }
+    if (drv && drv.auto && drv.canExit) {
+      exitVehicle();
       return;
     }
     if (drv) {
@@ -1893,6 +1916,7 @@
     results: queueResults,
     travel: (c) => travel(c),
     events: () => EV,
+    get drv() { return drv; },
     setRadio(i) {
       S.radio = i;
       A.setStation(i);
@@ -1900,7 +1924,7 @@
     },
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
-  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t) }) : null;
+  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
   // דפי תניא נסתרים בעיר
   const CL = G.makeCollectibles ? G.makeCollectibles({ scene, W, A, player, get S() { return S; }, toast, addJoy, addCommunity, save }) : null;
   resize();

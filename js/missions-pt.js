@@ -540,6 +540,11 @@
     let bresRetry = 0;
     function startPtB() {
       S().quests.ptB = Object.assign(DEF.ptB(), { status: 'active' });
+      // שמחה ברחוב — באור יום, שרואים את המעגלים
+      if (S().time < 8 || S().time > 15.5) {
+        S().time = 10;
+        setTimeout(() => api.toast('☀ בוקר בהיר בפתח תקווה — זמן מושלם לשמחה', 'gold'), 900);
+      }
       launchBres();
       api.save();
     }
@@ -576,7 +581,7 @@
         const ev = bresStage();
         if (!ev || ev.state === 'ask') return 'הניידת של ברסלב מחכה (סימון סגול במפה). עולים אליה — ' + ACT + ' ליד הניידת.';
         if (ev.state === 'drive') return 'נוסעים עם החבר׳ה לתחנה ' + (ev.i + 1) + ' מתוך 3.';
-        if (ev.state === 'dance') return 'רוקדים! 🎉';
+        if (ev.state === 'dance') return api.drv === ev.bv ? 'רוקדים! 🎉 אפשר לרדת (' + ACT + ') ולהציע מצוות לקהל.' : 'דברו עם האנשים בקהל — ואז חזרו לניידת (' + ACT + ').';
         return 'עוד רגע...';
       },
       pt3: () => (q('pt3').step === 'march' ? 'הובל את התהלוכה לבית הכנסת הגדול. לאט — שכולם יעמדו בקצב.' : 'ריקודים!'),
@@ -739,6 +744,7 @@
           const ev = bresStage();
           row('הניידת', !ev || ev.state === 'ask' ? 'מחכה לך' : '✓ על הניידת', !ev || ev.state === 'ask' ? '' : 'ok');
           row('תחנות', ev ? Math.min(3, ev.i + (ev.state === 'drive' ? 0 : 1)) + '/3' : '0/3', '');
+          row('מצוות שהצעת לקהל', String((ev && ev.mitzvot) || 0), (ev && ev.mitzvot) ? 'ok' : '');
         } else if (a === 'ptS') {
           h += '</ul><div class="tr-obj">' + HINT.ptS() + '</div>';
           return h;

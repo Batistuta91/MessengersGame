@@ -275,51 +275,123 @@
       ev.ttl = 600;
       driveTo(0);
     }
+    // ---------- נהג אוטומטי: מסלול מוחלק בנתיב הימני, נסיעה רציפה בלי התנגשויות ----------
+    function buildPath(route, startH) {
+      let pts = [];
+      for (const p of route) {
+        const last = pts[pts.length - 1];
+        if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > 0.8) pts.push([p[0], p[1]]);
+      }
+      if (pts.length < 2) pts.push([pts[0][0] + Math.sin(startH), pts[0][1] + Math.cos(startH)]);
+      // החלקת פינות (צ׳ייקין) — סיבובים רכים במקום זוויות חדות
+      for (let it = 0; it < 3; it++) {
+        const np = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1];
+          np.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+        }
+        np.push(pts[pts.length - 1]);
+        pts = np;
+      }
+      // נתיב ימני (1.6 מ׳ ממרכז הכביש), חוץ מנקודות ההתחלה והסוף
+      const n = pts.length, lane = [];
+      for (let i = 0; i < n; i++) {
+        const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+        const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+        const k = Math.min(1, Math.min(i, n - 1 - i) / 6);
+        lane.push([pts[i][0] - (dz / L) * 1.6 * k, pts[i][1] + (dx / L) * 1.6 * k]);
+      }
+      const cum = [0];
+      for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(lane[i][0] - lane[i - 1][0], lane[i][1] - lane[i - 1][1]));
+      return { pts: lane, cum, len: cum[n - 1] };
+    }
+    function pathAt(P, s) {
+      s = G.clamp(s, 0, P.len);
+      let lo = 0, hi = P.cum.length - 1;
+      while (hi - lo > 1) {
+        const m = (lo + hi) >> 1;
+        if (P.cum[m] <= s) lo = m;
+        else hi = m;
+      }
+      const seg = P.cum[hi] - P.cum[lo] || 1, f = (s - P.cum[lo]) / seg;
+      const a = P.pts[lo], b = P.pts[hi];
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    }
     function driveTo(i) {
       const st = ev.stops[i], bv = ev.bv;
       ev.i = i;
       ev.state = 'drive';
-      ev.stuck = 0;
-      ev.route = (W.route && W.route(bv.x, bv.z, st.x, st.z)) || [[bv.x, bv.z], [st.x, st.z]];
-      ev.ri = 1;
-      // פונים לכיוון המסלול לפני היציאה
-      const nx = ev.route[Math.min(2, ev.route.length - 1)];
-      if (Math.abs(bv.v) < 1) bv.h = Math.atan2(nx[0] - bv.x, nx[1] - bv.z);
+      ev.waitT = 0;
+      bv.canExit = false;
+      const route = (W.route && W.route(bv.x, bv.z, st.x, st.z)) || [[bv.x, bv.z], [st.x, st.z]];
+      ev.path = buildPath(route, bv.h);
+      ev.s = 0;
+      ev.spd = Math.abs(bv.v) || 0;
       bv.auto = autopilot;
     }
     function autopilot(dt, v) {
       const st = ev && ev.stops[ev.i];
-      if (!ev || ev.state !== 'drive' || !st) return { throttle: 0, steer: 0, brake: true };
-      const R = ev.route;
-      while (ev.ri < R.length - 1 && Math.hypot(R[ev.ri][0] - v.x, R[ev.ri][1] - v.z) < 7) ev.ri++;
-      const tg = R[ev.ri];
-      const dEnd = Math.hypot(st.x - v.x, st.z - v.z);
-      if (dEnd < 4) {
-        if (Math.abs(v.v) < 0.6) arrive();
-        return { throttle: 0, steer: 0, brake: true };
+      if (!ev || ev.state !== 'drive' || !st || !ev.path) return { kin: { x: v.x, z: v.z, h: v.h, v: 0 } };
+      const P = ev.path, left = P.len - ev.s;
+      // מהירות: עד 10 מ׳/ש׳, לאט בסיבובים חדים, בלימה רכה לקראת התחנה
+      const [ax, az] = pathAt(P, ev.s), [bx, bz] = pathAt(P, ev.s + 3), [cx, cz] = pathAt(P, ev.s + 12);
+      const turn = Math.abs(G.wrapAngle(Math.atan2(cx - bx, cz - bz) - Math.atan2(bx - ax, bz - az)));
+      let want = Math.min(10, turn > 0.6 ? 5 : turn > 0.3 ? 7.5 : 10, Math.sqrt(2 * 2.2 * Math.max(0, left - 0.5)) + 0.6);
+      // רכב לפנינו בנתיב: מחכים מאחוריו (ואם הוא לא זז 4 שניות — ממשיכים בזהירות)
+      const fx = Math.sin(v.h), fz = Math.cos(v.h);
+      let block = false;
+      for (const o of (api.trafficObstacles ? api.trafficObstacles() : [])) {
+        const dx = o.x - v.x, dz = o.z - v.z, ahead = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx);
+        if (ahead > 2 && ahead < 11 && side < 2.2) block = true;
       }
-      // תקועים? מקפיצים קצת קדימה במסלול
-      ev.stuck = v.blocked > 0 || Math.abs(v.v) < 0.5 ? ev.stuck + dt : 0;
-      if (ev.stuck > 3.5) {
-        ev.stuck = 0;
-        const n = R[Math.min(ev.ri + 1, R.length - 1)];
-        v.x = tg[0];
-        v.z = tg[1];
-        v.h = Math.atan2(n[0] - v.x, n[1] - v.z);
-        v.v = 0;
+      if (block) {
+        ev.waitT += dt;
+        if (ev.waitT < 4) want = 0;
+        else want = Math.min(want, 3);
+      } else ev.waitT = 0;
+      ev.spd += G.clamp(want - ev.spd, -5 * dt, 3 * dt);
+      ev.s = Math.min(P.len, ev.s + ev.spd * dt);
+      const [x, z] = pathAt(P, ev.s), [hx, hz] = pathAt(P, ev.s + 2.5);
+      const h = G.lerpAngle(v.h, Math.atan2(hx - x, hz - z), 1 - Math.exp(-6 * dt));
+      // הגענו לסוף המסלול — עוצרים בתחנה
+      if (P.len - ev.s < 0.3) {
+        ev.spd = 0;
+        arrive();
       }
-      const diff = G.wrapAngle(Math.atan2(tg[0] - v.x, tg[1] - v.z) - v.h);
-      const want = Math.min(11, dEnd * 0.7 + 2) * (Math.abs(diff) > 0.7 ? 0.45 : 1);
-      return { throttle: G.clamp((want - v.v) * 0.4, -1, 1), steer: G.clamp(diff * 2.5, -1, 1), brake: false };
+      return { kin: { x, z, h, v: ev.spd } };
+    }
+    // מצוות שהשליח מציע לקהל בתחנות (השליח יכול לרדת מהניידת)
+    const OFFERS = [
+      ['תפילין', 'רוצה להניח תפילין? חמש דקות, ממש פה ליד הריקודים.', 'יאללה — היום יום של שמחה!'],
+      ['נרות שבת', 'יש לכם בבית נרות לשבת? הנה ערכה במתנה.', 'תודה! אמא שלי תשמח מאוד.'],
+      ['מזוזה', 'יש מזוזה בבית? אפשר לבדוק לך שהיא כשרה.', 'מזמן לא בדקתי... תבוא השבוע?'],
+      ['צדקה', 'רוצה לתת שקל לצדקה? פרוטה לצדקה — ברכה לכל היום.', 'הנה, בשמחה!'],
+      ['שמע ישראל', 'בוא נגיד ביחד ״שמע ישראל״ — שתי שניות.', 'שמע ישראל... וואו, מזמן לא אמרתי.'],
+      ['ספר תהילים', 'רוצה ספר תהילים קטן? לכיס, לכל יום.', 'בטח! סבתא שלי תמיד אמרה תהילים.'],
+    ];
+    const CROWD_NAMES = ['אבי', 'יוסי', 'רונן', 'דני', 'אלי', 'שמוליק'];
+    function talkCrowd(p, k) {
+      const o = OFFERS[(ev.i * 2 + k) % OFFERS.length];
+      api.say({
+        id: 'crowd', def: { name: CROWD_NAMES[k % CROWD_NAMES.length], role: 'מהקהל' }, x: p.group.position.x, z: p.group.position.z, rot: 0,
+        nodes: {
+          a: { s: 'npc', t: 'איזו שמחה! מאיפה הגעתם עם הרמקול הזה?', c: [{ t: o[1], go: 'b' }] },
+          b: { s: 'npc', t: o[2], end: () => { p.talked = true; ev.mitzvot = (ev.mitzvot || 0) + 1; api.addJoy(3); A.success(); api.toast('✓ ' + o[0] + ' · +3 שמחה', 'gold'); } },
+        },
+      });
     }
     function arrive() {
       const st = ev.stops[ev.i];
       ev.state = 'dance';
       ev.danceT = 0;
+      ev.waitTold = false;
       ev.bv.v = 0;
+      ev.bv.canExit = true;
       ev.bv.camLook = { x: st.cx, z: st.cz };
+      crowds[ev.i].forEach((p) => (p.talked = false));
       A.cheer && A.cheer();
       api.toast(['🎉 החבר׳ה יורדים לרקוד!', '🎉 עוד תחנה — עוד ריקוד!', '🎉 תחנה אחרונה — שמחה גדולה!'][ev.i], 'gold');
+      if (ev.i === 0) setTimeout(() => api.toast('אפשר לרדת מהניידת (' + ACT + ') ולהציע לקהל מצוות — הניידת תחכה לך', 'gold'), 1800);
       dancers.forEach((p, k) => {
         p.group.visible = true;
         p.from = { x: ev.bv.x + st.nx * 1.4 + st.ux * (k - 1.5) * 0.5, z: ev.bv.z + st.nz * 1.4 + st.uz * (k - 1.5) * 0.5 };
@@ -351,9 +423,21 @@
       if (ev.state !== 'dance') return;
       const st = ev.stops[ev.i];
       ev.danceT += dt;
+      // השליח ירד לדבר עם הקהל — ממשיכים לרקוד עד שהוא חוזר לניידת
+      // בתחנה האחרונה: אם כבר דיברתם עם כל הקהל (או עברה דקה) — מסיימים גם בלי לחזור לניידת
+      const outside = api.drv !== bv;
+      ev.outT = outside ? (ev.outT || 0) + dt : 0;
+      const lastDone = ev.i === 2 && (crowds[2].every((p) => p.talked) || ev.outT > 60);
+      if (ev.danceT > 11.5 && outside && !lastDone) {
+        ev.danceT = 11.5;
+        if (!ev.waitTold) {
+          ev.waitTold = true;
+          api.toast('כשתסיימו עם הקהל — חזרו לניידת (' + ACT + ') ונמשיך לתחנה הבאה');
+        }
+      }
       const dT = ev.danceT;
       dancers.forEach((p, k) => {
-        const a = (k / dancers.length) * Math.PI * 2 + dT * 1.6;
+        const a = (k / dancers.length) * Math.PI * 2 + (t - (ev.t0 || 0)) * 1.6;
         const tx = st.cx + Math.cos(a) * 1.5, tz = st.cz + Math.sin(a) * 1.5;
         let x = tx, z = tz;
         const out = dT < 1.6 ? dT / 1.6 : dT > 12 ? Math.max(0, 1 - (dT - 12) / 1.4) : 1;
@@ -361,11 +445,11 @@
           x = p.from.x + (tx - p.from.x) * out;
           z = p.from.z + (tz - p.from.z) * out;
         }
-        const bob = G.animatePerson(p, dT * 9 + k, 1);
-        p.group.position.set(x, bob + (out >= 1 ? Math.abs(Math.sin(dT * 7 + k)) * 0.3 : 0), z);
+        const bob = G.animatePerson(p, t * 9 + k, 1);
+        p.group.position.set(x, bob + (out >= 1 ? Math.abs(Math.sin(t * 7 + k)) * 0.3 : 0), z);
         p.group.rotation.y = out >= 1 ? a + Math.PI : Math.atan2(tx - x, tz - z);
         if (out >= 1) {
-          p.armL.rotation.x = p.armR.rotation.x = -2.7 + Math.sin(dT * 7 + k) * 0.35;
+          p.armL.rotation.x = p.armR.rotation.x = -2.7 + Math.sin(t * 7 + k) * 0.35;
           p.armL.rotation.z = -0.3;
           p.armR.rotation.z = 0.3;
         }
@@ -535,6 +619,12 @@
         if (!ev) return out;
         if (ev.type === 'siddur' && ev.state === 'fetch')
           out.push({ x: van.x - Math.sin(van.h) * 2.9, z: van.z - Math.cos(van.h) * 2.9, r: 2.2, prio: true, label: 'לקחת סידור מתא המטען של הטנק', run: () => { ev.state = 'have'; A.load(); api.toast('יש סידור! חזרה ליעקב'); NP.yaakov.nodes = { a: { s: 'npc', t: 'וואו, הבאת! תודה, תודה. עכשיו אני יכול להתפלל.', end: () => reward(6, 1, 'יעקב התפלל מנחה!') } }; } });
+        // בתחנה: השליח ירד מהניידת — מציעים מצוות לאנשים בקהל
+        if (ev.type === 'breslev' && ev.state === 'dance' && api.drv !== ev.bv && crowds)
+          crowds[ev.i].forEach((p, k) => {
+            if (p.talked) return;
+            out.push({ x: p.group.position.x, z: p.group.position.z, r: 1.7, label: 'להציע מצווה ל' + CROWD_NAMES[k % CROWD_NAMES.length], run: () => talkCrowd(p, k) });
+          });
         // אפשר לעלות לניידת גם בלי לדבר קודם עם נחמן
         if (ev.type === 'breslev' && ev.state === 'ask')
           out.push({ x: ev.bv.x, z: ev.bv.z, r: 3.6, prio: true, label: 'לעלות לניידת של ברסלב', run: () => { api.toast('נחמן: ״נ נח נחמ נחמן מאומן! עולים — יוצאים לשמח!״', 'gold'); boardBreslev(); } });
