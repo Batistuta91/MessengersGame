@@ -333,6 +333,62 @@
       }
     }, true);
 
+    // ---------- טקסטורות צילום (ambientCG, CC0) מעל הקרקע, הכבישים והמדרכות ----------
+    // הצילום מצויר על בד גדול, ועליו הסימונים (פס צהוב, שוליים לבנים, אבן שפה אדומה-לבנה) באותם יחסים כמו קודם
+    function photoTex(tex, key, size, tile, tint, over) {
+      const src = window.GROUND_TEX && window.GROUND_TEX[key];
+      if (!src) return;
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const g = c.getContext('2d');
+        for (let y = 0; y < tile; y++) for (let x = 0; x < tile; x++) g.drawImage(img, (x * size) / tile, (y * size) / tile, size / tile, size / tile);
+        if (tint) {
+          g.globalCompositeOperation = 'multiply';
+          g.fillStyle = tint;
+          g.fillRect(0, 0, size, size);
+          g.globalCompositeOperation = 'source-over';
+        }
+        if (over) over(g, size);
+        tex.image = c;
+        tex.magFilter = T.LinearFilter;
+        tex.minFilter = T.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true;
+        tex.anisotropy = 4;
+        tex.needsUpdate = true;
+      };
+      img.src = src;
+    }
+    const lanePaint = (g, S, major) => {
+      const u = S / 32;
+      g.globalAlpha = 0.88;
+      if (major) {
+        g.fillStyle = '#e8c74e';
+        g.fillRect(15 * u, 0, 2 * u, 16 * u);
+      }
+      g.fillStyle = '#dcdcd4';
+      g.fillRect(2 * u, 0, u, S);
+      g.fillRect(29 * u, 0, u, S);
+      g.globalAlpha = 1;
+    };
+    photoTex(texMajor, 'asphalt', 512, 2, 'rgb(112,114,122)', (g, S) => lanePaint(g, S, true));
+    photoTex(texMinor, 'asphalt', 512, 2, 'rgb(112,114,122)');
+    photoTex(groundTex, 'grass', 512, 2, 'rgb(232,226,186)');
+    photoTex(texPave, 'pave', 256, 1, 'rgb(236,230,220)');
+    photoTex(texCurb, 'pave', 256, 1, 'rgb(236,230,220)', (g, S) => {
+      // אבן שפה: 3/16 מהרוחב, ארבעה מקטעים לאורך, עם קו צל כלפי המדרכה
+      const x0 = (13 / 16) * S, q = S / 4;
+      for (let k = 0; k < 4; k++) {
+        g.fillStyle = k % 2 ? '#e6e2da' : '#b8362a';
+        g.fillRect(x0, k * q, S - x0, q);
+      }
+      g.fillStyle = 'rgba(0,0,0,0.28)';
+      g.fillRect(x0 - S / 64, 0, S / 64, S);
+      g.fillStyle = 'rgba(255,255,255,0.18)';
+      g.fillRect(x0, 0, S / 96, S);
+    });
+
     // ================= ריבונים: כבישים, מדרכות, שבילים =================
     function Ribbon() {
       return { pos: [], uv: [] };
@@ -449,6 +505,11 @@
       g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
       g.computeVertexNormals();
       const tex = G.canvasTex(32, 32, grassDraw(b.col, 200), true);
+      // צילום לפי סוג השטח, צבוע לכיוון הצבע המקורי של השטח
+      const cc = new T.Color(b.col), green = cc.g > cc.r * 1.15 && cc.g > cc.b * 1.3;
+      if (b.col === '#5c5e63') photoTex(tex, 'asphalt', 256, 1, 'rgb(130,132,140)');
+      else if (green) photoTex(tex, 'grass', 256, 1, G.shade(b.col, 0.62));
+      else photoTex(tex, 'pave', 256, 2, G.shade(b.col, 0.5));
       const m = new T.Mesh(g, W.decal(lam(0xffffff, { map: tex })));
       m.renderOrder = 1 + b.y * 10;
       m.receiveShadow = true;
