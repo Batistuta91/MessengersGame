@@ -10,7 +10,7 @@
     const ACT = isTouch ? 'כפתור הפעולה' : 'E';
     const city = W.cityId || 'hod';
     const NEED = 6;
-    const TITLE = '🫓 פסח · ״מצה שמורה לכל השכונה״';
+    const TITLE = '🫓 פרק 2 · משימה 4 · ״מצה שמורה לכל השכונה״';
     const CALLER = city === 'pt' ? 'ר׳ מנחם' : 'משה';
     const N = (id) => api.npcById[id];
 
@@ -18,7 +18,8 @@
     const DEF = () => ({ status: 'locked', step: 'bake', best: 0, delivered: {}, recips: [], city: null });
     S().quests.pesach = Object.assign(DEF(), S().quests.pesach || {});
     const q = () => S().quests.pesach;
-    const ch2Done = () => !!(S().quests.pt3 && S().quests.pt3.status === 'complete');
+    // נפתחת אחרי הסיבוב עם ברסלב (משימה 3 בפרק 2), וסוגרת את הפרק
+    const ch2Done = () => ['ptB', 'pt3'].some((id) => S().quests[id] && S().quests[id].status === 'complete');
     const active = () => q().status === 'active';
 
     // מי מקבל מצה: דמויות קבועות בעיר הנוכחית שגלויות עכשיו
@@ -219,7 +220,7 @@
         title: 'סדר פסח לכל השכונה!',
         note: '״כל דכפין ייתי ויכול״ — כל מי שרעב, יבוא ויאכל. השנה, השולחן של בית חב״ד היה ארוך מספיק לכולם.',
         rows: [['מצות בסבב הטוב', String(st.best)], ['קיבלו מצה שמורה', st.recips.length + ' אנשים']],
-        changes: ['כל מי שקיבל מצה ישב בסדר המשותף', 'המאפייה פתוחה תמיד — נסו לשבור את השיא'],
+        changes: ['✓ פרק 2 הושלם!', 'כל מי שקיבל מצה ישב בסדר המשותף', 'בהוד השרון: בית חב״ד יכול להפוך ל״מרכז השליחות הגדול״ (770)', 'המאפייה פתוחה תמיד — נסו לשבור את השיא'],
         onClose: () => {
           seder.visible = false;
           for (const n of moved) {

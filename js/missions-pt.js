@@ -21,7 +21,8 @@
       pt3: () => ({ status: 'locked', elapsed: 0, step: 'march', lags: 0, lagT: 0, joy: 0, comm: 0 }),
       ptS: () => ({ status: 'locked', elapsed: 0, step: 'meet', story: 0, storyT: 0, joy: 0, comm: 0 }),
     };
-    const QIDS = ['pt1', 'pt2', 'ptB', 'pt3'];
+    // פרק 2: שוק, שניידר, ברסלב — ואז משימת המצות והסדר (js/pesach.js) שסוגרת את הפרק
+    const QIDS = ['pt1', 'pt2', 'ptB'];
     if (!S().quests) S().quests = {};
     for (const id of [...QIDS, 'ptS']) {
       S().quests[id] = Object.assign(DEF[id](), S().quests[id] || {});
@@ -30,9 +31,11 @@
     const q = (id) => S().quests[id];
     const done = (id) => q(id).status === 'complete';
     const activeId = () => [...QIDS, 'ptS'].find((id) => q(id).status === 'active') || null;
-    const available = (id) => (id === 'pt1' ? true : id === 'pt2' ? done('pt1') : id === 'ptB' ? done('pt2') : done('ptB') || done('pt3'));
+    // ספר התורה (משימה 5) נפתח אחרי משימת המצות (משימה 4, js/pesach.js)
+    const pesachDone = () => !!(S().quests.pesach && S().quests.pesach.status === 'complete');
+    const available = (id) => (id === 'pt1' ? true : id === 'pt2' ? done('pt1') : id === 'ptB' ? done('pt2') : (done('ptB') && pesachDone()) || done('pt3'));
     const nextQuest = () => QIDS.find((id) => !done(id)) || null;
-    const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', ptB: 'פרק 2 · משימה 3 · ״לשמח את העיר״', pt3: 'פרק 2 · משימה 4 · ״ספר תורה לבית הכנסת הגדול״' };
+    const TITLES = { ptS: '✦ משימה סודית · ״הנכד של המייסדים״', pt1: 'פרק 2 · משימה 1 · ״שוק של ברכות״', pt2: 'פרק 2 · משימה 2 · ״ביקור חולים״', ptB: 'פרק 2 · משימה 3 · ״לשמח את העיר״', pt3: 'פרק 2 · משימה 5 · ״ספר תורה לבית הכנסת הגדול״' };
     const MEN = 'ר׳ מנחם';
 
     // ================= סימון מקום עצירה לטנק: עמוד אור + טבעת ועיגול זוהר על הרצפה =================
@@ -357,7 +360,7 @@
           const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
           const tx = a[0] - (dz / L) * side, tz = a[1] + (dx / L) * side;
           const d = Math.hypot(tx - m.x, tz - m.z);
-          const sp = Math.min(d, 4.6 * dt);
+          const sp = Math.min(d, 7 * dt);
           if (d > 0.05) {
             m.x += ((tx - m.x) / d) * sp;
             m.z += ((tz - m.z) / d) * sp;
@@ -373,7 +376,7 @@
         chuppah.position.set(m0.x, 0, m0.z);
         chuppah.rotation.y = m0.p.group.rotation.y;
         // הטנק רחוק מדי מהתהלוכה
-        const far = headDist() > 24;
+        const far = headDist() > 30;
         if (far) {
           st.lagT += dt;
           if (st.lagT > 1.5 && !st.lagWarn) {
@@ -405,7 +408,7 @@
           st.cheer = true;
           A.cheer && A.cheer();
         }
-        if (st.cerT > 14) completePt3();
+        if (st.cerT > 9) completePt3();
       }
     }
     function startCeremony() {
@@ -593,16 +596,16 @@
     });
     function mosheDialog() {
       const a = activeId();
-      if (!a && done('pt3') && (q('ptS').status === 'idle' || q('ptS').status === 'locked')) return SECRET_OFFER();
+      if (!a && pesachDone() && (q('ptS').status === 'idle' || q('ptS').status === 'locked')) return SECRET_OFFER();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (q(a).timeLeft !== undefined ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx]();
-      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, ספר התורה' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון, בתפריט ההשהיה. ותבוא לבקר!' } };
+      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון, בתפריט ההשהיה. ותבוא לבקר!' } };
     }
     function mosheIcon() {
       if (activeId()) return 'hint';
       const nx = nextQuest();
-      if (!nx && q('ptS').status !== 'complete') return 'mission';
+      if (!nx && pesachDone() && q('ptS').status !== 'complete') return 'mission';
       return nx && available(nx) ? 'mission' : null;
     }
 
@@ -750,12 +753,15 @@
           return h;
         } else if (a === 'pt3') {
           const d = Math.round(headDist());
-          row('התהלוכה', st.step === 'ceremony' ? '🎉 רוקדים' : d > 24 ? 'מאחור! ' + d + ' מ׳' : 'צמודה · ' + d + ' מ׳', st.step === 'ceremony' || d <= 24 ? 'ok' : 'later');
+          row('התהלוכה', st.step === 'ceremony' ? '🎉 רוקדים' : d > 30 ? 'מאחור! ' + d + ' מ׳' : 'צמודה · ' + d + ' מ׳', st.step === 'ceremony' || d <= 30 ? 'ok' : 'later');
         }
         return h + '</ul><div class="tr-obj">' + HINT[a]() + '</div>';
       }
       const nx = nextQuest();
+      if (nx && !available(nx) && nx === 'pt3') return '<div class="tr-title">🫓 פרק 2 · משימה 4 · ״מצה שמורה לכל השכונה״</div><div class="tr-obj">פסח מתקרב! דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
       if (nx) return '<div class="tr-title">' + TITLES[nx] + '</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד פתח תקווה <span class="ic blue">!</span></div>';
+      // אחרי ברסלב: משימת המצות (מנוהלת ב-js/pesach.js)
+      if (!pesachDone()) return '<div class="tr-title">🫓 פרק 2 · משימה 4 · ״מצה שמורה לכל השכונה״</div><div class="tr-obj">פסח מתקרב! דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
       if (q('ptS').status === 'idle') return '<div class="tr-title">' + TITLES.ptS + '</div><div class="tr-obj">ר׳ יואל מחכה בכיכר. ' + MEN + ' יודע איפה.</div>';
       return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">' + (done('ptS') ? 'גם ר׳ יואל חזר לבית הכנסת. ' : '') + 'פתח תקווה מכירה את השליח. המשך יבוא...</div>';
     }
@@ -775,7 +781,7 @@
       },
       driveMods(v) {
         // בתהלוכה הטנק נוסע לאט
-        if (v === van && activeId() === 'pt3' && q('pt3').step === 'march') return { max: 0.34, grip: 1 };
+        if (v === van && activeId() === 'pt3' && q('pt3').step === 'march') return { max: 0.5, grip: 1 };
         return { max: 1, grip: 1 };
       },
       obstacles(out) {
@@ -793,7 +799,7 @@
         const nx = nextQuest();
         // את הפגישה הראשונה עושים פנים אל פנים, ליד בית חב״ד
         if (nx === 'pt1' && !S().flags.ptMet) return null;
-        if (!nx && q('ptS').status === 'locked') return { id: 'ptS', nodes: SECRET_OFFER() };
+        if (!nx && pesachDone() && q('ptS').status === 'locked') return { id: 'ptS', nodes: SECRET_OFFER() };
         return nx && available(nx) ? { id: nx, nodes: OFFER[nx]() } : null;
       },
       update(dt) {

@@ -820,7 +820,7 @@
       }),
     };
     const PT_OFFER = () => ({
-      a: { s: 'npc', t: 'יש לי בקשה גדולה. ר׳ מנחם, השליח בפתח תקווה, צריך יד: השוק לפני שבת, ביקור חולים בשניידר, וספר תורה חדש לבית הכנסת הגדול.', go: 'b' },
+      a: { s: 'npc', t: 'יש לי בקשה גדולה. ר׳ מנחם, השליח בפתח תקווה, צריך יד: השוק לפני שבת, ביקור חולים בשניידר, ומצות לכל העיר לקראת פסח.', go: 'b' },
       b: {
         s: 'npc', t: 'תיסע אליו עם הטנק? פה בהוד השרון הכול מסודר — ותמיד אפשר לחזור, מתפריט ההשהיה.',
         c: [
@@ -835,7 +835,7 @@
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx](q(nx).status === 'failed');
       if (q('secret').status === 'idle') return { a: { s: 'npc', t: 'ר׳ זלמן... עוד לא הלכת אליו? אין לחץ — אבל הוא מחכה.', c: [{ t: 'אני הולך עכשיו.', fx: startSecret }, { t: 'עוד מעט' }] } };
-      if (S().chabadLevel === 3 && M.canUpgrade(4)) return { a: { s: 'npc', t: 'שמעתי מה עשית בפתח תקווה — השוק, שניידר, ספר התורה! הגיע הזמן: נהפוך את בית חב״ד ל״מרכז השליחות הגדול״, בהשראת 770. היכנס בדלת!' } };
+      if (S().chabadLevel === 3 && M.canUpgrade(4)) return { a: { s: 'npc', t: 'שמעתי מה עשית בפתח תקווה — השוק, שניידר, והסדר לכל השכונה! הגיע הזמן: נהפוך את בית חב״ד ל״מרכז השליחות הגדול״, בהשראת 770. היכנס בדלת!' } };
       if (S().chabadLevel === 4) return { a: { s: 'npc', t: 'תסתכל על החזית הזאת... 770 בהוד השרון! מכאן יוצאים שלוחים לכל הארץ. ר׳ מנחם שולח ד״ש.' } };
       if (done('m4') && S().flags.ptUnlocked) return { a: { s: 'npc', t: 'ר׳ מנחם מחכה לך בפתח תקווה! נוסעים מתפריט ההשהיה. ' + (S().chabadLevel < 3 ? 'ואל תשכח לשדרג את בית חב״ד למרכז קהילתי — היכנס בדלת.' : 'אני שומר פה על הבית.') } };
       if (done('m4') && S().chabadLevel < 3) return { a: { s: 'npc', t: 'ראית את הכיכר? כל העיר מוארת! עכשיו הזמן להפוך את בית חב״ד למרכז קהילתי — היכנס בדלת.' } };
@@ -1033,7 +1033,7 @@
       else if (!done('secret')) h += '<div class="tr-obj">השכונה מתעוררת... אולי עוד מישהו מחכה לכם.</div>';
       else if (S().chabadLevel === 3 && M.canUpgrade(4)) h += '<div class="tr-obj">היכנסו לבית חב״ד ושדרגו ל״מרכז השליחות הגדול״ <span class="ic">★</span></div>';
       else if (S().chabadLevel >= 4) h += '<div class="tr-obj">🏛 770 בהוד השרון! מכאן יוצאים שלוחים לכל הארץ.</div>';
-      else if (S().quests.pt3 && S().quests.pt3.status === 'complete') h += '<div class="tr-obj">פרק 2 הושלם. ' + (S().chabadLevel < 3 ? 'שדרגו קודם את בית חב״ד למרכז קהילתי.' : '') + '</div>';
+      else if (['pesach', 'pt3'].some((id) => S().quests[id] && S().quests[id].status === 'complete')) h += '<div class="tr-obj">פרק 2 הושלם. ' + (S().chabadLevel < 3 ? 'שדרגו קודם את בית חב״ד למרכז קהילתי.' : '') + '</div>';
       else h += '<div class="tr-obj">פרק 2 מחכה: ר׳ מנחם בפתח תקווה. נוסעים מתפריט ההשהיה (' + (isTouch ? 'כפתור השהיה' : 'Esc') + ').</div>';
       return h;
     }
@@ -1102,8 +1102,8 @@
         return null;
       },
       canUpgrade(lv) {
-        // דרגה 4: אחרי פרק 2 (ספר התורה בפתח תקווה)
-        if (lv === 4) return S().chabadLevel >= 3 && !!(S().quests.pt3 && S().quests.pt3.status === 'complete');
+        // דרגה 4: אחרי פרק 2 (הסדר המשותף בסוף משימת המצות; או ספר התורה בשמירות ישנות)
+        if (lv === 4) return S().chabadLevel >= 3 && ['pesach', 'pt3'].some((id) => S().quests[id] && S().quests[id].status === 'complete');
         return lv === 3 && done('m4');
       },
       update(dt) {

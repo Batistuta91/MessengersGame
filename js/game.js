@@ -274,14 +274,25 @@
     car: { name: 'המכונית של משה', enter: 'לנהוג במכונית של משה', max: 32, acc: 17, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.7, icon: '🚗', hide: true, wheelR: 0.33, pitch: 1.4 },
     scooter: { name: 'קטנוע', enter: 'לעלות על הקטנוע', max: 24, acc: 16, grip: 1.45, offs: [0], r: 0.6, len: 1.6, cam: 4.8, camH: 1.7, icon: '🛵', hide: false, seat: 0.84, wheelR: 0.24, pitch: 2.2 },
     breslev: { name: 'הניידת של ברסלב', enter: 'לעלות לניידת של ברסלב', max: 15, acc: 8, grip: 1, offs: [-1.8, 0, 1.8], r: 1.05, len: 5.4, cam: 10, camH: 2.8, icon: '🚐', hide: true, wheelR: 0.4, pitch: 0.9 },
+    taxi: { name: 'מונית', enter: 'לעלות למונית', max: 30, acc: 16, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.8, icon: '🚕', hide: true, wheelR: 0.33, pitch: 1.3 },
     bike: { name: 'אופניים', enter: 'לעלות על האופניים', max: 11, acc: 6, grip: 1.6, offs: [0], r: 0.55, len: 1.5, cam: 4.4, camH: 1.6, icon: '🚲', hide: false, seat: 0.9, wheelR: 0.33, pitch: 0 },
   };
   const RIDE_COLS = { scooter: [0xd62828, 0x1b6fd8, 0x2e9d5f, 0xf39c12], bike: [0x2c3e50, 0xc0392b, 0x16a085], car: [0x6b8fb8] };
   const vehicles = [];
+  // מונית: מכונית צהובה עם שלט על הגג
+  function makeTaxi() {
+    const m = G.makeDriveCar(0xf5c518);
+    const tex = G.textTex('מונית', { w: 64, h: 24, size: 16, bg: '#1a1a1a', fg: '#ffd23f', border: '#ffd23f' });
+    const sign = new T.Mesh(new T.BoxGeometry(0.9, 0.3, 0.32), [0, 1, 2, 3, 4, 5].map((i) => new T.MeshLambertMaterial(i === 0 || i === 1 || i === 4 || i === 5 ? { map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3 } : { color: 0x1a1a1a })));
+    sign.position.set(0, 1.78, -0.2);
+    sign.rotation.y = Math.PI / 2;
+    m.body.add(sign);
+    return m;
+  }
   function addVehicle(id, type, x, z, h) {
     const cols = RIDE_COLS[type] || [0xffffff];
     const c = cols[vehicles.length % cols.length];
-    const m = type === 'breslev' ? G.makeBreslevVan() : type === 'tank' ? G.makeVan() : type === 'car' ? G.makeDriveCar(c) : type === 'scooter' ? G.makeScooter(c) : G.makeBike(c);
+    const m = type === 'taxi' ? makeTaxi() : type === 'breslev' ? G.makeBreslevVan() : type === 'tank' ? G.makeVan() : type === 'car' ? G.makeDriveCar(c) : type === 'scooter' ? G.makeScooter(c) : G.makeBike(c);
     scene.add(m.group);
     const v = { id, type, P: VT[type], x, z, h, v: 0, lean: 0, hornCd: 0, steer: 0, m };
     vehicles.push(v);
@@ -338,7 +349,7 @@
   if (CITY === 'pt') {
     const tc = document.querySelector('#title .credit'), tl = document.querySelector('#title .tagline'), bd = document.querySelector('#title .badge');
     if (bd) bd.textContent = 'פרק 2 · פתח תקווה';
-    if (tl) tl.textContent = 'אם המושבות מחכה: שוק לפני שבת, ביקור חולים בשניידר, וספר תורה חדש לבית הכנסת הגדול.';
+    if (tl) tl.textContent = 'אם המושבות מחכה: שוק לפני שבת, ביקור חולים בשניידר, שמחה ברחובות — ומצות לכל השכונה לקראת פסח.';
     if (tc) tc.textContent = 'פתח תקווה · נתוני מפה: © OpenStreetMap contributors (ODbL)';
   }
 
@@ -1730,7 +1741,7 @@
     if (!ptOpen) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
     else {
       h += '<ul class="jr-list">';
-      h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״לשמח את העיר״', stOf('ptB')) + row('משימה 4 · ״ספר תורה לבית הכנסת הגדול״', stOf('pt3'));
+      h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״לשמח את העיר״', stOf('ptB')) + row('משימה 4 · ״מצה שמורה לכל השכונה״', stOf('pesach'));
       h += row('✦ ״הנכד של המייסדים״', stOf('ptS'), true);
       h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li></ul>';
     }
@@ -1939,7 +1950,7 @@
   // משימת פסח (אחרי פרק 2, בשתי הערים) — מתחברת למנהל המשימות של העיר
   const PS = G.makePesach ? G.makePesach({ scene, W, A, player, van, npcById, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, results: queueResults, say: (n) => talkTo(n) }) : null;
   if (PS) M = G.combineMissions(M, PS);
-  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
+  EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), isTouch, say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
   // מאפיית המצות (משחק מיומנות ליד המטבח של בית חב״ד)
   const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; }, onResult: (n, quit) => PS && PS.onBake(n, quit) }) : null;
   // דפי תניא נסתרים בעיר

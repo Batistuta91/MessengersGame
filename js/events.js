@@ -196,7 +196,9 @@
       dancers = DANCE_LOOKS.map(mk);
       crowds = [0, 1, 2].map(() => CROWD_LOOKS.map(mk));
     }
-    function roadSpot(from, minD, maxD, avoid) {
+    // clear: כמה מקום פנוי צריך סביב מעגל הריקודים (בלי קירות קרובים — שיראו את הרוקדים)
+    function roadSpot(from, minD, maxD, avoid, clear) {
+      clear = clear || 1.2;
       // רק כבישים בטווח (בעיר גדולה הגרלה מכל העיר כמעט אף פעם לא נופלת קרוב)
       const roads = (W.roadList || []).filter((r) => r.cls !== 'path' && r.t !== 'service' && r.w >= 6 && r.pts.some((p) => Math.abs(p[0] - from.x) < maxD + 40 && Math.abs(p[1] - from.z) < maxD + 40));
       for (let k = 0; k < 400 && roads.length; k++) {
@@ -211,7 +213,7 @@
         if (avoid && avoid.some((o) => Math.hypot(o.x - x, o.z - z) < 90)) continue;
         const ux = (bx - ax) / L, uz = (bz - az) / L, sd = rnd() < 0.5 ? 1 : -1, nx = -uz * sd, nz = ux * sd;
         let off = 0;
-        for (const o of [3.2, 2.6, 4.2]) if (!W.collide(x + nx * (r.w / 2 + o), z + nz * (r.w / 2 + o), 1.2).hit) { off = o; break; }
+        for (const o of [3.4, 4.6, 2.8, 5.8]) if (!W.collide(x + nx * (r.w / 2 + o), z + nz * (r.w / 2 + o), clear).hit) { off = o; break; }
         if (!off) continue;
         const cx = x + nx * (r.w / 2 + off), cz = z + nz * (r.w / 2 + off);
         return { x: x + nx * 1.7, z: z + nz * 1.7, h: Math.atan2(ux, uz), cx, cz, nx, nz, ux, uz, name: r.name };
@@ -235,7 +237,9 @@
       const stops = [];
       let from = at;
       for (let i = 0; i < 3; i++) {
-        const s = roadSpot(from, 90, 260, stops.concat([at]));
+        // מעדיפים מקום פתוח (מדרכה רחבה, כיכר, פארק); אם אין — מקלים בהדרגה
+        const av = stops.concat([at]);
+        const s = roadSpot(from, 90, 260, av, 3.8) || roadSpot(from, 90, 300, av, 2.6) || roadSpot(from, 90, 260, av);
         if (!s) return false;
         stops.push(s);
         from = s;
@@ -468,6 +472,89 @@
         else finishBreslev();
       }
     }
+    // ---------- מונית חזרה לטנק (בסוף הסיבוב עם ברסלב) ----------
+    function follower(route, h0, maxV) {
+      return { P: buildPath(route, h0), s: 0, spd: 0, maxV: maxV || 11 };
+    }
+    function followStep(f, dt, v) {
+      const P = f.P, left = P.len - f.s;
+      const [ax, az] = pathAt(P, f.s), [bx, bz] = pathAt(P, f.s + 3), [cx, cz] = pathAt(P, f.s + 12);
+      const turn = Math.abs(G.wrapAngle(Math.atan2(cx - bx, cz - bz) - Math.atan2(bx - ax, bz - az)));
+      const want = Math.min(f.maxV, turn > 0.6 ? 5.5 : turn > 0.3 ? 8 : f.maxV, Math.sqrt(2 * 2.4 * Math.max(0, left - 0.5)) + 0.6);
+      f.spd += G.clamp(want - f.spd, -5 * dt, 3.5 * dt);
+      f.s = Math.min(P.len, f.s + f.spd * dt);
+      const [x, z] = pathAt(P, f.s), [hx, hz] = pathAt(P, f.s + 2.5);
+      const h = G.lerpAngle(v.h, Math.atan2(hx - x, hz - z), 1 - Math.exp(-6 * dt));
+      const done = P.len - f.s < 0.3;
+      return { x, z, h, v: done ? 0 : f.spd, done };
+    }
+    let taxi = null, taxiIn = 0;
+    function callTaxi() {
+      if (taxi) return;
+      if (Math.hypot(player.x - van.x, player.z - van.z) < 45) return api.toast('טנק המבצעים ממש כאן 🚐');
+      const pick = W.nearestRoad && W.nearestRoad(player.x, player.z, 80);
+      const sp = roadSpot(player, 30, 90);
+      if (!pick || !sp) return api.toast('לא מצאתי מונית... ' + (api.isTouch ? 'לחצו 🚐 ליד המפה' : 'לחצו T') + ' כדי לנווט לטנק');
+      const tv = api.addVehicle('taxi1', 'taxi', sp.x, sp.z, sp.h);
+      tv.locked = true;
+      const pickup = { x: pick.x, z: pick.z };
+      taxi = { v: tv, state: 'come', t: 0, f: follower((W.route && W.route(sp.x, sp.z, pickup.x, pickup.z)) || [[sp.x, sp.z], [pickup.x, pickup.z]], sp.h, 10) };
+      api.toast('🚕 הזמנתי לך מונית חזרה לטנק המבצעים — היא בדרך', 'gold');
+    }
+    function updateTaxi(dt) {
+      const tv = taxi.v;
+      taxi.t += dt;
+      const spin = (sp) => {
+        for (const w of tv.m.wheels) w.rotation.x += (sp * dt) / tv.P.wheelR;
+      };
+      if (taxi.state === 'come') {
+        const r = followStep(taxi.f, dt, tv);
+        tv.x = r.x;
+        tv.z = r.z;
+        tv.h = r.h;
+        spin(r.v);
+        if (r.done) {
+          taxi.state = 'wait';
+          taxi.t = 0;
+          tv.locked = false;
+          A.horn && A.horn('car');
+          api.toast('🚕 המונית הגיעה — ' + ACT + ' ליד המונית כדי לעלות', 'gold');
+        }
+      } else if (taxi.state === 'wait') {
+        if (api.drv === tv) {
+          // הנסיעה לטנק — המונית נוהגת לבד
+          taxi.state = 'ride';
+          const dst = (W.nearestRoad && W.nearestRoad(van.x, van.z, 60)) || van;
+          taxi.f = follower((W.route && W.route(tv.x, tv.z, dst.x, dst.z)) || [[tv.x, tv.z], [dst.x, dst.z]], tv.h, 12);
+          tv.autoMsg = 'המונית בדרך לטנק המבצעים 🚕';
+          tv.auto = (dt2, v) => {
+            const r = followStep(taxi.f, dt2, v);
+            if (r.done && taxi.state === 'ride') {
+              taxi.state = 'arrived';
+              taxi.exitNow = true;
+            }
+            return { kin: r };
+          };
+        } else if (taxi.t > 150) removeTaxi();
+      } else if (taxi.state === 'arrived' && taxi.exitNow) {
+        taxi.exitNow = false;
+        tv.auto = null;
+        if (api.drv === tv) api.exitVehicle();
+        api.toast('הגעתם לטנק המבצעים! 🚐 תודה לנהג', 'gold');
+        taxi.state = 'leave';
+        taxi.t = 0;
+      } else if (taxi.state === 'leave' && taxi.t > 2.5) removeTaxi();
+    }
+    function removeTaxi() {
+      if (!taxi) return;
+      if (api.drv === taxi.v) {
+        taxi.v.auto = null;
+        api.exitVehicle();
+      }
+      api.removeVehicle(taxi.v);
+      taxi = null;
+    }
+
     function finishBreslev() {
       const bv = ev.bv, st = ev.stops[2];
       bv.auto = null;
@@ -481,6 +568,8 @@
         A.setStation(0);
       }
       reward(12, 3, 'שימחתם את העיר עם החבר׳ה מברסלב!');
+      // והשליח? תופס מונית חזרה לטנק המבצעים
+      taxiIn = 3.5;
       // כשזו משימה של פרק 2 — מודיעים למשימות
       if (ev.quest && onQuestDone) {
         const cb = onQuestDone;
@@ -584,9 +673,13 @@
       }
     }
 
-    const STARTERS = [startSiddur, startBoxes, startFamily, startBreslev, startMezuzah, startTremp];
+    // הניידת של ברסלב היא משימה בפתח תקווה (״לשמח את העיר״) — לא חוזרת כאירוע אקראי
+    const STARTERS = [startSiddur, startBoxes, startFamily, startMezuzah, startTremp];
+    const FORCEABLE = [startSiddur, startBoxes, startFamily, startBreslev, startMezuzah, startTremp];
     return {
       update(dt, busy) {
+        if (taxi) updateTaxi(dt);
+        if (taxiIn > 0 && (taxiIn -= dt) <= 0) callTaxi();
         if (ev) {
           if (ev.type === 'breslev') updateBreslev(dt);
           if (ev.type === 'breslev' && (ev.state === 'drive' || ev.state === 'dance')) return;
@@ -682,7 +775,7 @@
       },
       force(i) {
         clear();
-        return STARTERS[i]();
+        return FORCEABLE[i]();
       },
       // הניידת של ברסלב כמשימה (פרק 2): לא נעלמת עם הזמן, ומודיעה בסוף
       startBreslevQuest(cb) {
