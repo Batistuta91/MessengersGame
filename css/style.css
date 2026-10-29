@@ -378,3 +378,6 @@ body.touch #bigmap .bm-tip { display: none; }
 #matzah .mz-stats li { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dashed rgba(255,255,255,.15); }
 #matzah .mz-note { opacity: .8; font-size: 14px; }
 #matzah .stars { font-size: 34px; color: #ffd23f; }
+
+/* כותרת משנה באנגלית במסך הפתיחה */
+.title h1 .en-sub { display: block; direction: ltr; font-style: italic; font-size: 0.22em; letter-spacing: 0.08em; color: #ffd23f; text-shadow: 2px 2px 0 rgba(0,0,0,.6); margin-top: 6px; }

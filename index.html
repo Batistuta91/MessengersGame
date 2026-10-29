@@ -15,13 +15,13 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#13213f">
-  <title>השליחים: אין פה רגע דל</title>
-  <meta name="description" content="סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה. משחק חינם בדפדפן.">
+  <title>השליחים: אין פה רגע דל — Grand Theft Mitzvah</title>
+  <meta name="description" content="Grand Theft Mitzvah — סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה. משחק חינם בדפדפן.">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261028l">
+  <link rel="stylesheet" href="css/style.css?v=20261029a">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -188,7 +188,7 @@
   <div id="title" class="overlay title">
     <div class="title-card">
       <div class="badge">חינם בדפדפן · בלי התקנה</div>
-      <h1>השליחים<span>אין פה רגע דל</span></h1>
+      <h1>השליחים<span>אין פה רגע דל</span><em class="en-sub">Grand Theft Mitzvah</em></h1>
       <p class="tagline">סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאורו אותה.</p>
       <div class="title-btns">
         <button id="btn-play" class="btn big" disabled>⏳ טוען את העיר...</button>
@@ -201,14 +201,14 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js?v=20261028l"></script>
-  <script src="js/util.js?v=20261028l"></script>
-  <script src="music/playlist.js?v=20261028l"></script>
+  <script src="lib/three.min.js?v=20261029a"></script>
+  <script src="js/util.js?v=20261029a"></script>
+  <script src="music/playlist.js?v=20261029a"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js?v=20261028l" onerror="this.remove()"></script>
-  <script src="js/audio.js?v=20261028l"></script>
-  <script src="js/entities.js?v=20261028l"></script>
-  <script src="js/world.js?v=20261028l"></script>
+  <script src="music/playlist.local.js?v=20261029a" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261029a"></script>
+  <script src="js/entities.js?v=20261029a"></script>
+  <script src="js/world.js?v=20261029a"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -219,21 +219,21 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261028l"><\/script>');
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261029a"><\/script>');
     })();
   </script>
   <script>
     // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
-    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261028l"><\/script>');
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261029a"><\/script>');
   </script>
-  <script src="js/city.js?v=20261028l"></script>
-  <script src="js/missions.js?v=20261028l"></script>
-  <script src="js/missions-pt.js?v=20261028l"></script>
-  <script src="js/traffic.js?v=20261028l"></script>
-  <script src="js/events.js?v=20261028l"></script>
-  <script src="js/collect.js?v=20261028l"></script>
-  <script src="js/matzah.js?v=20261028l"></script>
-  <script src="js/voice.js?v=20261028l"></script>
-  <script src="js/game.js?v=20261028l"></script>
+  <script src="js/city.js?v=20261029a"></script>
+  <script src="js/missions.js?v=20261029a"></script>
+  <script src="js/missions-pt.js?v=20261029a"></script>
+  <script src="js/traffic.js?v=20261029a"></script>
+  <script src="js/events.js?v=20261029a"></script>
+  <script src="js/collect.js?v=20261029a"></script>
+  <script src="js/matzah.js?v=20261029a"></script>
+  <script src="js/voice.js?v=20261029a"></script>
+  <script src="js/game.js?v=20261029a"></script>
 </body>
 </html>
