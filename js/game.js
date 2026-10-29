@@ -276,6 +276,12 @@
     const on = S.settings.realChar !== false && !!RC;
     for (const o of oldParts) o.visible = !on;
     if (RC) RC.group.visible = on;
+    const onN = S.settings.realChar !== false;
+    for (const n of npcs) {
+      if (!n.rc) continue;
+      n.rc.group.visible = onN;
+      for (const part of [n.p.legL, n.p.legR, n.p.torso, n.p.armL, n.p.armR, n.p.head]) part.visible = !onN;
+    }
   }
   function loadRealChar() {
     if (RC || rcLoading || !G.loadRealChar || S.settings.realChar === false) return;
@@ -350,6 +356,38 @@
       look: { shirt: 0x2ecc71, pants: 0x222222, skin: 0xf2c6a2, hair: 0x6b4423, shorts: true, shoes: 0xffffff } },
   ];
   const npcs = [], npcById = {};
+  // דמויות מציאותיות לדמויות הקבועות — רשימה מפורשת (ילדים, נשים ודמויות אחרות נשארות קלאסיות)
+  const REAL_NPC = {
+    moshe: { k: 'moshe', hat: 'homburg', hair: 0x8a8a8a, beard: 0xd0d0d0, tzitzit: true },
+    yossi: { k: 'secular1', hair: 0x4a2f1b },
+    cohen: { k: 'dati', kippah: 0x1b3a8a, hair: 0x8a8a8a, beard: 0x8a8a8a },
+    daniel: { k: 'secular2', hair: 0x222222 },
+    roi: { k: 'secular1', hair: 0x2a1a10 },
+    ido: { k: 'secular1', hair: 0x6b4423 },
+    avraham: { k: 'dati', kippah: 0xf2f2f2, hair: 0xdddddd, beard: 0xe0e0e0 },
+    shimon: { k: 'secular2', hair: 0x555555 },
+    alon: { k: 'secular1', hair: 0x222222 },
+    zalman: { k: 'haredi', hat: 'homburg', hair: 0x777777, beard: 0x9a9a9a, tzitzit: true },
+    pt_shimshon: { k: 'secular2', hair: 0x333333 },
+    pt_avi: { k: 'dati', kippah: 0x2e7d4f, hair: 0x2a1a10, beard: 0x2a1a10 },
+    pt_moti: { k: 'secular1', hair: 0x3a2a1a },
+    pt_rachamim: { k: 'dati', kippah: 0x111111, hair: 0x555555, beard: 0x666666 },
+    pt_father: { k: 'secular1', hair: 0x4a2f1b },
+    pt_yoel: { k: 'moshe', hat: 'homburg', hair: 0xdddddd, beard: 0xf0f0f0, tzitzit: true },
+  };
+  let animDt = 0;
+  function attachRealNPC(n) {
+    if (S.settings.realChar === false || !G.loadNPCChar || n.rc || n.rcLoading) return;
+    // בפתח תקווה ״משה״ הוא ר׳ מנחם — חרדי צעיר יותר, זקן כהה
+    const o = n.id === 'moshe' && CITY === 'pt' ? { k: 'haredi', hat: 'homburg', hair: 0x2a1a10, beard: 0x3a2a1a, tzitzit: true } : REAL_NPC[n.id];
+    if (!o) return;
+    n.rcLoading = true;
+    G.loadNPCChar(ASSET_V, o.k, o, (rc) => {
+      n.rc = rc;
+      n.p.group.add(rc.group);
+      applyRealChar();
+    });
+  }
   function addNPC(d) {
     const p = G.makePerson(d.look);
     scene.add(p.group);
@@ -360,6 +398,7 @@
     const n = { id: d.id, def: d, x: d.x, z: d.z, rot: d.rot || 0, rotT: d.rot || 0, phase: 0, s: 0, p, icon, iconKind: null, hidden: false, ctrl: null };
     npcs.push(n);
     npcById[d.id] = n;
+    attachRealNPC(n);
     return n;
   }
   // בפתח תקווה: במקום משה — ר׳ מנחם, השליח של העיר; דמויות פרק 1 נשארות בהוד השרון
@@ -1793,7 +1832,7 @@
     $('p-sound').textContent = 'צליל: ' + (S.settings.sound ? 'פועל' : 'כבוי');
     $('p-shadows').textContent = 'גרפיקה: ' + (S.settings.shadows ? 'מלאה' : 'חסכונית');
     $('p-look').textContent = 'מראה: ' + (G.SMOOTH ? 'חלק (חדש)' : 'פיקסלים');
-    $('p-realchar').textContent = 'דמות השליח: ' + (S.settings.realChar !== false ? 'מציאותית' : 'קלאסית');
+    $('p-realchar').textContent = 'דמויות: ' + (S.settings.realChar !== false ? 'מציאותיות' : 'קלאסיות');
     $('p-voice').textContent = 'קולות דמויות: ' + (S.settings.voice !== false ? 'פועלים' : 'כבויים');
     if (G.voice) {
       G.voice.enabled = S.settings.voice !== false && S.settings.sound;
@@ -1888,9 +1927,10 @@
   $('p-realchar').addEventListener('click', () => {
     S.settings.realChar = S.settings.realChar === false;
     if (S.settings.realChar && !RC) {
-      toast('טוען את הדמות המציאותית...', 'gold');
+      toast('טוען את הדמויות המציאותיות...', 'gold');
       loadRealChar();
     }
+    if (S.settings.realChar) for (const n of npcs) attachRealNPC(n);
     applyRealChar();
     refreshSettingsLabels();
     save();
@@ -2331,6 +2371,11 @@
       n.p.group.position.set(n.x, bob, n.z);
       n.p.group.rotation.y = n.rot;
       if (n.sit) sitPose(n.p);
+      if (n.rc && n.rc.group.visible) {
+        // דמות מציאותית: בלי קפיצת ההליכה הקלאסית; מתעדכנת רק כשהיא קרובה לשחקן
+        n.p.group.position.y = n.sit ? 0.57 - n.rc.hipSit : 0;
+        if (Math.hypot(n.x - player.x, n.z - player.z) < 90) n.rc.update(animDt, { moving, spd: 2.6, sit: !!n.sit, talk: !!(dlg && dlg.npc === n) });
+      }
       const k = iconFor(n);
       if (k !== n.iconKind) {
         n.iconKind = k;
@@ -3089,6 +3134,7 @@
     clock += dt;
     if (mode === 'play') updatePlay(dt, clock);
     A.kolTick(dt);
+    animDt = dt;
     updateNPCs(mode === 'play' || mode === 'title' ? dt : 0, clock);
     updateWalkers(mode === 'play' || mode === 'title' ? dt : 0);
     if (TR && (mode === 'play' || mode === 'title')) TR.update(dt, { px: drv ? drv.x : player.x, pz: drv ? drv.z : player.z, driving: !!drv, vehicles });
