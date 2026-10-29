@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261029i">
+  <link rel="stylesheet" href="css/style.css?v=20261029j">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -145,6 +145,7 @@
         <button id="p-sound" class="btn">צליל: פועל</button>
         <button id="p-voice" class="btn">קולות דמויות: פועלים</button>
         <button id="p-look" class="btn">מראה: פיקסלים</button>
+        <button id="p-realchar" class="btn">דמות השליח: מציאותית</button>
         <button id="p-shadows" class="btn">גרפיקה: מלאה</button>
         <button id="p-travel" class="btn hidden">🚐 נסיעה לפתח תקווה</button>
         <button id="p-unstick" class="btn">🆘 תקועים? חזרה לבית חב״ד</button>
@@ -201,14 +202,14 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js?v=20261029i"></script>
-  <script src="js/util.js?v=20261029i"></script>
-  <script src="music/playlist.js?v=20261029i"></script>
+  <script src="lib/three.min.js?v=20261029j"></script>
+  <script src="js/util.js?v=20261029j"></script>
+  <script src="music/playlist.js?v=20261029j"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js?v=20261029i" onerror="this.remove()"></script>
-  <script src="js/audio.js?v=20261029i"></script>
-  <script src="js/entities.js?v=20261029i"></script>
-  <script src="js/world.js?v=20261029i"></script>
+  <script src="music/playlist.local.js?v=20261029j" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261029j"></script>
+  <script src="js/entities.js?v=20261029j"></script>
+  <script src="js/world.js?v=20261029j"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -219,22 +220,24 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261029i"><\/script>');
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261029j"><\/script>');
     })();
   </script>
   <script>
     // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
-    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261029i"><\/script>');
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261029j"><\/script>');
   </script>
-  <script src="js/city.js?v=20261029i"></script>
-  <script src="js/missions.js?v=20261029i"></script>
-  <script src="js/missions-pt.js?v=20261029i"></script>
-  <script src="js/traffic.js?v=20261029i"></script>
-  <script src="js/events.js?v=20261029i"></script>
-  <script src="js/collect.js?v=20261029i"></script>
-  <script src="js/matzah.js?v=20261029i"></script>
-  <script src="js/pesach.js?v=20261029i"></script>
-  <script src="js/voice.js?v=20261029i"></script>
-  <script src="js/game.js?v=20261029i"></script>
+  <script src="js/city.js?v=20261029j"></script>
+  <script src="js/missions.js?v=20261029j"></script>
+  <script src="js/missions-pt.js?v=20261029j"></script>
+  <script src="js/traffic.js?v=20261029j"></script>
+  <script src="js/events.js?v=20261029j"></script>
+  <script src="js/collect.js?v=20261029j"></script>
+  <script src="js/matzah.js?v=20261029j"></script>
+  <script src="js/pesach.js?v=20261029j"></script>
+  <script src="js/voice.js?v=20261029j"></script>
+  <script src="lib/GLTFLoader.js?v=20261029j"></script>
+  <script src="js/realchar.js?v=20261029j"></script>
+  <script src="js/game.js?v=20261029j"></script>
 </body>
 </html>

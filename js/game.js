@@ -268,6 +268,30 @@
     p: G.makePerson({ shirt: 0xffffff, jacket: 0x1a1a1a, pants: 0x1a1a1a, skin: 0xf1c9a0, hat: 'fedora', beard: 0x3a2a1a, tzitzit: true }),
   };
   scene.add(player.p.group);
+  // דמות מציאותית לשחקן (MakeHuman) — נטענת ברקע; עד אז ואם כובתה בתפריט — הדמות הקלאסית
+  let RC = null, rcLoading = false;
+  const oldParts = [player.p.legL, player.p.legR, player.p.torso, player.p.armL, player.p.armR, player.p.head];
+  const ASSET_V = (/[?&]v=([^&]+)/.exec((document.querySelector('script[src*="js/game.js"]') || {}).src || '') || [])[1] || '1';
+  function applyRealChar() {
+    const on = S.settings.realChar !== false && !!RC;
+    for (const o of oldParts) o.visible = !on;
+    if (RC) RC.group.visible = on;
+  }
+  function loadRealChar() {
+    if (RC || rcLoading || !G.loadRealChar || S.settings.realChar === false) return;
+    rcLoading = true;
+    G.loadRealChar(
+      ASSET_V,
+      (rc) => {
+        RC = rc;
+        rcLoading = false;
+        player.p.group.add(rc.group);
+        applyRealChar();
+      },
+      () => (rcLoading = false)
+    );
+  }
+  loadRealChar();
   // ---------- כלי רכב: הטנק, מכונית, קטנוע ואופניים ----------
   const VT = {
     tank: { name: 'טנק המבצעים', enter: 'כניסה לטנק המבצעים', max: W.city ? 25 : 21, acc: 13, grip: 1, offs: [-2.1, -0.7, 0.7, 2.1], r: 1.15, len: 6, cam: 10, camH: 2.5, icon: '🚐', hide: true, wheelR: 0.46, pitch: 1 },
@@ -847,6 +871,7 @@
     }
     const sprint = keys.ShiftLeft || keys.ShiftRight || (isTouch && joy.mag > 0.95);
     const sp = (sprint ? 9.5 : 6) * len;
+    player.spd = sp;
     // קפיצה (רווח)
     if (keys.Space && player.jy <= 0 && player.vy <= 0) {
       player.vy = 5.2;
@@ -1767,6 +1792,7 @@
     $('p-sound').textContent = 'צליל: ' + (S.settings.sound ? 'פועל' : 'כבוי');
     $('p-shadows').textContent = 'גרפיקה: ' + (S.settings.shadows ? 'מלאה' : 'חסכונית');
     $('p-look').textContent = 'מראה: ' + (G.SMOOTH ? 'חלק (חדש)' : 'פיקסלים');
+    $('p-realchar').textContent = 'דמות השליח: ' + (S.settings.realChar !== false ? 'מציאותית' : 'קלאסית');
     $('p-voice').textContent = 'קולות דמויות: ' + (S.settings.voice !== false ? 'פועלים' : 'כבויים');
     if (G.voice) {
       G.voice.enabled = S.settings.voice !== false && S.settings.sound;
@@ -1857,6 +1883,16 @@
     refreshSettingsLabels();
     save();
     if (S.settings.voice && G.voice) G.voice.speak('שלום, שליח!', 'moshe');
+  });
+  $('p-realchar').addEventListener('click', () => {
+    S.settings.realChar = S.settings.realChar === false;
+    if (S.settings.realChar && !RC) {
+      toast('טוען את הדמות המציאותית...', 'gold');
+      loadRealChar();
+    }
+    applyRealChar();
+    refreshSettingsLabels();
+    save();
   });
   $('p-shadows').addEventListener('click', () => {
     S.settings.shadows = !S.settings.shadows;
@@ -3026,7 +3062,7 @@
   function poseRider() {
     if (!drv || drv.P.hide) return;
     const p = player.p;
-    p.group.position.set(drv.x, drv.P.seat - 0.88, drv.z);
+    p.group.position.set(drv.x, drv.P.seat - (RC && RC.group.visible ? RC.hipDrive - 0.06 : 0.88), drv.z);
     p.group.rotation.y = drv.h;
     p.group.rotation.z = drv.lean;
     if (drv.type === 'bike') {
@@ -3062,6 +3098,12 @@
     player.p.group.position.set(player.x, pb + player.jy, player.z);
     player.p.group.rotation.y = player.rot;
     if (player.sit) sitPose(player.p);
+    const realOn = RC && RC.group.visible;
+    if (realOn) {
+      // הדמות המציאותית: בלי קפיצת ההליכה של הדמות הקלאסית; בישיבה — האגן בגובה הספסל
+      player.p.group.position.y = player.sit ? 0.57 - RC.hipSit : player.jy;
+      RC.update(dt, { moving: player.moving && mode === 'play', spd: player.spd, jy: player.jy, sit: !!player.sit, ride: !!(drv && !drv.P.hide), talk: mode === 'dialog' && !drv });
+    }
     for (const v of vehicles) {
       v.m.group.position.set(v.x, 0, v.z);
       v.m.group.rotation.y = v.h;
@@ -3133,7 +3175,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; },
       player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
