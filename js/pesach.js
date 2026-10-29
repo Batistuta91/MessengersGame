@@ -35,6 +35,8 @@
       pickRecipients();
       if (q().step === 'seder') q().step = 'deliver';
     }
+    // רענון באמצע הסדר — חוזרים לנקודה שלפני תחילתו
+    if (active() && q().step === 'sedertime') q().step = 'seder';
 
     // ---------- קופסת המצות ליד המטבח ----------
     const kitchen = (W.spots || {}).kitchen || (W.spots || {}).playerStart;
@@ -72,6 +74,22 @@
         cup.position.set(x + 0.25, 0.9, k % 2 ? 0.35 : -0.35);
         seder.add(plate, mz, cup);
       }
+      // ספסלים לאורך השולחן וכיסא בראשו (לשליח)
+      for (const z of [-1.0, 1.0]) {
+        const bench = new T.Mesh(new T.BoxGeometry(6.0, 0.08, 0.4), lam(0x8a5a32));
+        bench.position.set(0, 0.44, z);
+        seder.add(bench);
+        for (const x of [-2.8, 2.8]) {
+          const bl = new T.Mesh(new T.BoxGeometry(0.08, 0.44, 0.34), lam(0x6b3e1f));
+          bl.position.set(x, 0.22, z);
+          seder.add(bl);
+        }
+      }
+      const chair = new T.Mesh(new T.BoxGeometry(0.45, 0.08, 0.45), lam(0x8a5a32));
+      chair.position.set(-3.55, 0.44, 0);
+      const chairLeg = new T.Mesh(new T.BoxGeometry(0.4, 0.44, 0.4), lam(0x6b3e1f));
+      chairLeg.position.set(-3.55, 0.22, 0);
+      seder.add(chair, chairLeg);
       const keara = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.03, 16), lam(0xd4a017));
       keara.position.set(0, 0.86, 0);
       seder.add(keara);
@@ -188,6 +206,7 @@
         n.x = s.x;
         n.z = s.z;
         n.rot = n.rotT = s.rot;
+        n.sit = true;
       });
       const host = N('moshe');
       const head = fr ? F(3.5, 3.3) : [player.x, player.z];
@@ -196,6 +215,17 @@
         host.z = head[1];
         host.rot = host.rotT = fr ? fr.ang - Math.PI / 2 : 0;
         moved.push(host);
+      }
+      if (fr) {
+        // השליח יושב בקצה השני של השולחן, מול המארח
+        const [px, pz] = F(-3.55, 3.3);
+        player.x = px;
+        player.z = pz;
+        player.rot = fr.ang + Math.PI / 2;
+        player.sit = true;
+        // מצלמה קבועה מצד הרחוב, מעט מלמעלה — כל השולחן בתמונה
+        const [cx, cz] = F(-2.2, 10.5), [lx, lz] = F(0.3, 3.3);
+        api.shot && api.shot({ pos: new T.Vector3(cx, 4.6, cz), look: new T.Vector3(lx, 0.9, lz) });
       }
       A.cheer && A.cheer();
       api.say({
@@ -223,7 +253,10 @@
         changes: ['✓ פרק 2 הושלם!', 'כל מי שקיבל מצה ישב בסדר המשותף', 'בהוד השרון: בית חב״ד יכול להפוך ל״מרכז השליחות הגדול״ (770)', 'המאפייה פתוחה תמיד — נסו לשבור את השיא'],
         onClose: () => {
           seder.visible = false;
+          player.sit = false;
+          api.shot && api.shot(null);
           for (const n of moved) {
+            n.sit = false;
             n.x = n.def.x;
             n.z = n.def.z;
             n.rot = n.rotT = n.def.rot || 0;
@@ -270,7 +303,7 @@
         if (ch2Done() && (q().status === 'locked' || q().status === 'idle')) return OFFER();
         return null;
       },
-      mosheIcon: () => (active() ? 'hint' : ch2Done() && q().status !== 'complete' ? 'mission' : null),
+      mosheIcon: () => (active() ? (q().step === 'sedertime' ? false : 'hint') : ch2Done() && q().status !== 'complete' ? 'mission' : null),
       npcDialog,
       iconFor: (n) => (active() && q().step === 'deliver' && q().recips.includes(n.id) && !q().delivered[n.id] ? 'alert' : null),
       interactables() {

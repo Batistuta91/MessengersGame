@@ -1948,7 +1948,7 @@
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
   // משימת פסח (אחרי פרק 2, בשתי הערים) — מתחברת למנהל המשימות של העיר
-  const PS = G.makePesach ? G.makePesach({ scene, W, A, player, van, npcById, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, results: queueResults, say: (n) => talkTo(n) }) : null;
+  const PS = G.makePesach ? G.makePesach({ scene, W, A, player, van, npcById, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, results: queueResults, say: (n) => talkTo(n), shot: (s) => { camShot = s; } }) : null;
   if (PS) M = G.combineMissions(M, PS);
   EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), isTouch, say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
   // מאפיית המצות (משחק מיומנות ליד המטבח של בית חב״ד)
@@ -2255,6 +2255,13 @@
   }
 
   // ================= עדכוני עולם =================
+  // ישיבה על ספסל: רגליים קדימה, ידיים על השולחן
+  function sitPose(p) {
+    p.legL.rotation.x = p.legR.rotation.x = -1.4;
+    p.armL.rotation.x = p.armR.rotation.x = -0.85;
+    p.torso.rotation.y = 0;
+    p.group.position.y = -0.44;
+  }
   function updateNPCs(dt, t) {
     const m = S.mission;
     for (const n of npcs) {
@@ -2286,6 +2293,7 @@
       }
       n.p.group.position.set(n.x, bob, n.z);
       n.p.group.rotation.y = n.rot;
+      if (n.sit) sitPose(n.p);
       const k = iconFor(n);
       if (k !== n.iconKind) {
         n.iconKind = k;
@@ -2917,7 +2925,15 @@
   const goal = new T.Vector3();
   const tpTarget = new T.Vector3(), tpWant = new T.Vector3(), tpDir = new T.Vector3(), tpRay = new T.Raycaster();
   let tpInit = false;
+  // צילום קבוע לסצנה (למשל הסדר המשותף): המצלמה לא נצמדת לגב השחקן
+  let camShot = null;
   function followThird(dt) {
+    if (camShot) {
+      camP.position.copy(camShot.pos);
+      camP.lookAt(camShot.look);
+      camTarget.set(camShot.look.x, 0, camShot.look.z);
+      return;
+    }
     if (!tpInit) {
       tpInit = true;
       tp.yaw = drv ? drv.h : player.rot;
@@ -2956,6 +2972,7 @@
   }
   function followCam(dt) {
     if (drv) goal.set(drv.x + Math.sin(drv.h) * drv.v * 0.35, 0, drv.z + Math.cos(drv.h) * drv.v * 0.35);
+    else if (camShot) goal.set(camShot.look.x, 0, camShot.look.z);
     else goal.set(player.x, 0, player.z);
     camTarget.lerp(goal, 1 - Math.exp(-6 * dt));
     const target = drv ? 36 + Math.abs(drv.v) * 0.25 : 28;
@@ -3044,6 +3061,7 @@
     const pb = G.animatePerson(player.p, player.phase, player.moving ? 1 : 0);
     player.p.group.position.set(player.x, pb + player.jy, player.z);
     player.p.group.rotation.y = player.rot;
+    if (player.sit) sitPose(player.p);
     for (const v of vehicles) {
       v.m.group.position.set(v.x, 0, v.z);
       v.m.group.rotation.y = v.h;
