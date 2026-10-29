@@ -360,3 +360,21 @@ body.touch #bigmap .bm-tip { display: none; }
 /* כפתור הפתיחה בזמן טעינת העיר */
 #btn-play:disabled { opacity: .75; cursor: progress; animation: loadPulse 1.2s ease-in-out infinite; }
 @keyframes loadPulse { 50% { opacity: .45; } }
+
+/* מאפיית מצות */
+#matzah { z-index: 75; }
+#matzah .mz-card { background: #1d140e; border: 3px solid #d6a050; border-radius: 12px; padding: 12px 14px; width: min(680px, 96vw); color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.6); text-align: center; }
+#matzah .mz-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+#matzah .mz-head b { color: #ffd23f; font-size: 20px; }
+#matzah #mz-clock { font-weight: 800; font-size: 18px; }
+#matzah #mz-clock.low { color: #ff6b6b; }
+#matzah #mz-count { font-weight: 700; color: #f3d38a; }
+#matzah canvas { width: 100%; height: auto; border-radius: 8px; display: block; }
+#matzah .mz-tip { margin: 8px 0; min-height: 22px; font-size: 15px; opacity: .9; }
+#matzah .mz-btns { display: flex; gap: 10px; justify-content: center; }
+#matzah .mz-btns .btn { min-width: 140px; font-size: 22px; padding: 12px 18px; touch-action: manipulation; }
+#matzah .mz-end h2 { color: #ffd23f; margin: 6px 0; }
+#matzah .mz-stats { list-style: none; padding: 0; margin: 8px auto; max-width: 340px; }
+#matzah .mz-stats li { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dashed rgba(255,255,255,.15); }
+#matzah .mz-note { opacity: .8; font-size: 14px; }
+#matzah .stars { font-size: 34px; color: #ffd23f; }

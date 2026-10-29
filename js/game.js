@@ -583,6 +583,7 @@
     if (c === 'Enter' && !e.repeat) e.preventDefault();
     if (c === 'Enter' && e.repeat) return e.preventDefault();
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(c) && mode !== 'title') e.preventDefault();
+    if (mode === 'matzah') return; // למאפייה מקשים משלה
     if (mode === 'title') {
       if (c === 'Enter') $('btn-play').click();
       return;
@@ -1153,6 +1154,14 @@
       }
     }
     const door = W.places.chabadDoor, dd = dist(player, door);
+    // מאפיית המצות ליד המטבח
+    if (MZ) {
+      const it = MZ.interactable(player), dz = it ? dist(player, MZ.spot) : 99;
+      if (it && dz < best) {
+        best = dz;
+        cur = { kind: 'matzah', label: it.label, x: it.x, z: it.z };
+      }
+    }
     // הדלת מנצחת רק אם היא קרובה בבירור יותר מאדם שעומד לידה (משה ליד הדלת)
     if (dd < 1.8 && dd < best - (cur && cur.kind === 'npc' ? 0.4 : 0)) {
       best = dd;
@@ -1187,7 +1196,10 @@
     if (cur.kind === 'quest') cur.run();
     else if (cur.kind === 'npc') talkTo(cur.ref);
     else if (cur.kind === 'van') enterVehicle(cur.ref);
-    else if (cur.kind === 'door') {
+    else if (cur.kind === 'matzah') {
+      mode = 'matzah';
+      MZ.open();
+    } else if (cur.kind === 'door') {
       if (CITY === 'pt') toast('בית חב״ד פתח תקווה — ר׳ מנחם מארח אתכם כאן 💙');
       else openPanel();
     }
@@ -1925,6 +1937,8 @@
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
   EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
+  // מאפיית המצות (משחק מיומנות ליד המטבח של בית חב״ד)
+  const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; } }) : null;
   // דפי תניא נסתרים בעיר
   const CL = G.makeCollectibles ? G.makeCollectibles({ scene, W, A, player, get S() { return S; }, toast, addJoy, addCommunity, save }) : null;
   resize();
@@ -3087,7 +3101,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; },
       player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
