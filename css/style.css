@@ -371,7 +371,7 @@ body.touch #bigmap .bm-tip { display: none; }
 #matzah #mz-count { font-weight: 700; color: #f3d38a; }
 #matzah canvas { width: 100%; height: auto; border-radius: 8px; display: block; }
 #matzah .mz-tip { margin: 8px 0; min-height: 22px; font-size: 15px; opacity: .9; }
-#matzah .mz-btns { display: flex; gap: 10px; justify-content: center; }
+#matzah .mz-btns { display: flex; gap: 10px; justify-content: center; direction: ltr; }
 #matzah .mz-btns .btn { min-width: 140px; font-size: 22px; padding: 12px 18px; touch-action: manipulation; }
 #matzah .mz-end h2 { color: #ffd23f; margin: 6px 0; }
 #matzah .mz-stats { list-style: none; padding: 0; margin: 8px auto; max-width: 340px; }
