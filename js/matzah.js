@@ -190,6 +190,8 @@
       if (!quit && joy) api.addJoy(joy);
       if (!quit && n >= 5) api.addCommunity(1);
       api.save();
+      // משימת פסח (אם פעילה) מקבלת את תוצאת הסבב
+      if (api.onResult) api.onResult(n, quit);
       $('mz-btns').innerHTML = '';
       $('mz-tip').textContent = '';
       $('mz-canvas').classList.add('hidden');

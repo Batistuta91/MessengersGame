@@ -1936,9 +1936,12 @@
     },
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
+  // משימת פסח (אחרי פרק 2, בשתי הערים) — מתחברת למנהל המשימות של העיר
+  const PS = G.makePesach ? G.makePesach({ scene, W, A, player, van, npcById, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, results: queueResults, say: (n) => talkTo(n) }) : null;
+  if (PS) M = G.combineMissions(M, PS);
   EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
   // מאפיית המצות (משחק מיומנות ליד המטבח של בית חב״ד)
-  const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; } }) : null;
+  const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; }, onResult: (n, quit) => PS && PS.onBake(n, quit) }) : null;
   // דפי תניא נסתרים בעיר
   const CL = G.makeCollectibles ? G.makeCollectibles({ scene, W, A, player, get S() { return S; }, toast, addJoy, addCommunity, save }) : null;
   resize();
