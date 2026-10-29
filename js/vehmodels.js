@@ -4,7 +4,6 @@
   'use strict';
   const G = window.G, T = THREE;
   const D = window.VEH_DATA;
-  if (!D) return;
   window.VEH_DATA = null;
 
   const dec = (s, Arr) => {
@@ -37,6 +36,9 @@
     g.computeBoundingSphere();
     return g;
   }
+  // משמש גם את העצים (js/nature.js)
+  G.buildPacked = build;
+  if (!D) return;
   const cache = {};
   const get = (k, part) => {
     const key = k + ':' + part;

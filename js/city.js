@@ -1568,7 +1568,28 @@
     };
     function buildTileProps(t, r) {
       const tr = t.trees;
-      if (tr.length) {
+      const pa = t.palms;
+      // עצים ודקלים אמיתיים: דגם לכל עץ לפי מיקומו, גוון עלווה מעט שונה לכל עץ
+      const N = G.NAT;
+      if (N && N.trees.length && N.palms.length) {
+        const plant = (list, models, scaleK) => {
+          const by = {};
+          for (const p of list) {
+            const k = models[Math.abs(Math.round(p[0] * 3 + p[1] * 5)) % models.length];
+            (by[k] || (by[k] = [])).push(p);
+          }
+          for (const k in by) {
+            const L = by[k], rot = L.map(() => r() * 6.28), tint = L.map(() => [0.82 + r() * 0.3, 0.88 + r() * 0.24, 0.8 + r() * 0.25]);
+            inst(t.grp, N.geo(k), N.mat(), L.length, (im, i) => {
+              const s = L[i][2] * scaleK;
+              setM(im, i, L[i][0], 0, L[i][1], rot[i], s, s, s);
+              im.setColorAt(i, col.setRGB(tint[i][0], tint[i][1], tint[i][2]));
+            }, true);
+          }
+        };
+        if (tr.length) plant(tr, N.trees, 1);
+        if (pa.length) plant(pa, N.palms, 1);
+      } else if (tr.length) {
         const rr = tr.map(() => [r() * 6, 0.22 + r() * 0.09, 0.27 + r() * 0.08]);
         inst(t.grp, trunkGeo, trunkMat, tr.length, (im, i) => setM(im, i, tr[i][0], 0.8 * tr[i][2], tr[i][1], rr[i][0], tr[i][2], tr[i][2], tr[i][2]), true);
         inst(t.grp, leafGeo, leafMat, tr.length, (im, i) => {
@@ -1582,8 +1603,7 @@
           im.setColorAt(i, col.setHSL(rr[i][1] + 0.02, 0.48, rr[i][2] + 0.09));
         }, true);
       }
-      const pa = t.palms;
-      if (pa.length) {
+      if (!(N && N.trees.length && N.palms.length) && pa.length) {
         const ry = pa.map(() => r() * 6);
         inst(t.grp, palmGeo, palmMat, pa.length, (im, i) => setM(im, i, pa[i][0], 3 * pa[i][2], pa[i][1], ry[i], pa[i][2], pa[i][2], pa[i][2]), true);
         inst(t.grp, frondGeo, frondMat, pa.length, (im, i) => setM(im, i, pa[i][0], 6 * pa[i][2], pa[i][1], ry[i], pa[i][2], pa[i][2], pa[i][2]), true);
