@@ -295,20 +295,21 @@
   // ---------- כלי רכב: הטנק, מכונית, קטנוע ואופניים ----------
   const VT = {
     tank: { name: 'טנק המבצעים', enter: 'כניסה לטנק המבצעים', max: W.city ? 25 : 21, acc: 13, grip: 1, offs: [-2.1, -0.7, 0.7, 2.1], r: 1.15, len: 6, cam: 10, camH: 2.5, icon: '🚐', hide: true, wheelR: 0.46, pitch: 1 },
-    car: { name: 'המכונית של משה', enter: 'לנהוג במכונית של משה', max: 32, acc: 17, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.7, icon: '🚗', hide: true, wheelR: 0.33, pitch: 1.4 },
+    car: { name: 'המכונית של משה', enter: 'לנהוג במכונית של משה', max: 32, acc: 17, grip: 1.1, offs: [-1.25, 1.25], r: 0.95, len: G.VEH ? 4.45 : 3.9, cam: 7, camH: 1.7, icon: '🚗', hide: true, wheelR: G.VEH ? 0.28 : 0.33, pitch: 1.4 },
     scooter: { name: 'קטנוע', enter: 'לעלות על הקטנוע', max: 24, acc: 16, grip: 1.45, offs: [0], r: 0.6, len: 1.6, cam: 4.8, camH: 1.7, icon: '🛵', hide: false, seat: 0.84, wheelR: 0.24, pitch: 2.2 },
     breslev: { name: 'הניידת של ברסלב', enter: 'לעלות לניידת של ברסלב', max: 15, acc: 8, grip: 1, offs: [-1.8, 0, 1.8], r: 1.05, len: 5.4, cam: 10, camH: 2.8, icon: '🚐', hide: true, wheelR: 0.4, pitch: 0.9 },
-    taxi: { name: 'מונית', enter: 'לעלות למונית', max: 30, acc: 16, grip: 1.1, offs: [-1.1, 1.1], r: 0.95, len: 3.9, cam: 7, camH: 1.8, icon: '🚕', hide: true, wheelR: 0.33, pitch: 1.3 },
+    taxi: { name: 'מונית', enter: 'לעלות למונית', max: 30, acc: 16, grip: 1.1, offs: [-1.3, 1.3], r: 0.95, len: G.VEH ? 4.6 : 3.9, cam: 7, camH: 1.8, icon: '🚕', hide: true, wheelR: G.VEH ? 0.29 : 0.33, pitch: 1.3 },
     bike: { name: 'אופניים', enter: 'לעלות על האופניים', max: 11, acc: 6, grip: 1.6, offs: [0], r: 0.55, len: 1.5, cam: 4.4, camH: 1.6, icon: '🚲', hide: false, seat: 0.9, wheelR: 0.33, pitch: 0 },
   };
   const RIDE_COLS = { scooter: [0xd62828, 0x1b6fd8, 0x2e9d5f, 0xf39c12], bike: [0x2c3e50, 0xc0392b, 0x16a085], car: [0x6b8fb8] };
   const vehicles = [];
   // מונית: מכונית צהובה עם שלט על הגג
   function makeTaxi() {
-    const m = G.makeDriveCar(0xf5c518);
+    const m = G.makeDriveCar(0xf5c518, 'q_taxi');
     const tex = G.textTex('מונית', { w: 64, h: 24, size: 16, bg: '#1a1a1a', fg: '#ffd23f', border: '#ffd23f' });
     const sign = new T.Mesh(new T.BoxGeometry(0.9, 0.3, 0.32), [0, 1, 2, 3, 4, 5].map((i) => new T.MeshLambertMaterial(i === 0 || i === 1 || i === 4 || i === 5 ? { map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3 } : { color: 0x1a1a1a })));
-    sign.position.set(0, 1.78, -0.2);
+    // במודל האמיתי יש כבר שלט קטן על הגג — השלט העברי יושב עליו ומכסה אותו
+    sign.position.set(0, m.info ? m.info.H - 0.05 : 1.78, m.info ? -0.1 : -0.2);
     sign.rotation.y = Math.PI / 2;
     m.body.add(sign);
     return m;
@@ -3176,7 +3177,7 @@
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
       get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; },
-      player, van, npcById, keys, tick, interact, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
+      player, van, npcById, keys, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
   try {

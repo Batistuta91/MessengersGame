@@ -575,7 +575,9 @@
   };
 
   // מכונית לנהיגה (עם גוף וגלגלים נפרדים לאנימציה)
-  G.makeDriveCar = function (color) {
+  G.makeDriveCar = function (color, model) {
+    // מודל אמיתי (אם נטען), אחרת — הקופסאות הישנות
+    if (G.VEH && G.VEH.has(model || 'q_car1')) return G.VEH.drive(model || 'q_car1', color);
     const g = new T.Group(), body = new T.Group();
     g.add(body);
     box(body, 1.8, 0.7, 3.9, color, 0, 0.7, 0);
@@ -598,8 +600,17 @@
     return { group: g, body, wheels };
   };
 
-  G.makeCar = function (color) {
+  // מכוניות פרטיות לחניה ולתנועה (מודלים אמיתיים)
+  G.CAR_MODELS = ['q_car1', 'q_car2', 'q_suv', 'q_sport', 'r_hatch', 'r_sedan', 'r_suv', 'r_pickup', 'r_van'];
+  G.makeCar = function (color, model) {
     const g = new T.Group();
+    if (G.VEH) {
+      const k = model || G.CAR_MODELS[Math.abs(color | 0) % G.CAR_MODELS.length];
+      if (G.VEH.has(k)) {
+        g.add(G.VEH.mesh(k, color));
+        return g;
+      }
+    }
     box(g, 1.8, 0.75, 3.9, color, 0, 0.65, 0);
     box(g, 1.62, 0.44, 2.02, 0x22334d, 0, 1.24, -0.25);
     box(g, 1.6, 0.14, 1.9, color, 0, 1.52, -0.25);

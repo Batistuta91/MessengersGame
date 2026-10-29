@@ -33,8 +33,9 @@
       scene.add(b);
       boxes.push(b);
     }
-    const truck = G.makeDriveCar(0xf2f2ee);
-    truck.group.scale.set(1.25, 1.35, 1.6);
+    // משאית ההובלה: מודל משאית אמיתי (או מכונית מוגדלת אם המודלים לא נטענו)
+    const truck = G.VEH ? G.makeDriveCar(0xf2f2ee, 'r_truck') : G.makeDriveCar(0xf2f2ee);
+    if (!G.VEH) truck.group.scale.set(1.25, 1.35, 1.6);
     truck.group.visible = false;
     scene.add(truck.group);
     const truckBoxes = new T.Group();

@@ -160,26 +160,54 @@
       { w: 0.3, h: 0.8, d: 0.8, x: -1.15, y: 0.4, z: -3.6, c: '#151515' },
       { w: 0.3, h: 0.8, d: 0.8, x: 1.15, y: 0.4, z: -3.6, c: '#151515' },
     ]);
-    const mat = new T.MeshLambertMaterial({ vertexColors: true });
     const NCAR = 36, NBUS = 3;
-    // לאוטובוסים חומר נפרד וצבע בסיס לבן — חומר משותף בלי צבע מופע יצא שחור לגמרי
-    const busMat = new T.MeshLambertMaterial({ vertexColors: true });
-    const carIM = new T.InstancedMesh(carGeo, mat, NCAR), busIM = new T.InstancedMesh(busGeo, busMat, NBUS);
-    carIM.castShadow = busIM.castShadow = true;
-    carIM.frustumCulled = busIM.frustumCulled = false;
-    scene.add(carIM, busIM);
     const COLS = [0xc0392b, 0x2980b9, 0x16a085, 0xf39c12, 0x8e44ad, 0x7f8c8d, 0xecf0f1, 0x2c3e50, 0xbdc3c7, 0x34495e, 0xd35400, 0xf5f5f5, 0x1a1a1a, 0x95a5a6];
     const col = new T.Color();
     const cars = [];
-    for (let i = 0; i < NCAR + NBUS; i++) {
-      const bus = i >= NCAR;
-      const c = { bus, idx: bus ? i - NCAR : i, e: null, t: 0, v: 0, x: 0, z: 0, h: 0, stuck: 0, ghost: 0, wait: 0, len: bus ? 11 : 3.9 };
-      if (!bus) carIM.setColorAt(c.idx, col.set(COLS[(rnd() * COLS.length) | 0]));
-      else busIM.setColorAt(c.idx, col.set(0xffffff));
-      cars.push(c);
+    const IMS = [];
+    // מודלים אמיתיים (data/vehicles.js): כל דגם — InstancedMesh אחד; צבע המופע צובע רק את גוף הרכב
+    const useVeh = !!(G.VEH && G.VEH.has('r_bus') && G.CAR_MODELS);
+    if (useVeh) {
+      const POOL = G.CAR_MODELS.concat(['q_taxi', 'q_taxi', 'r_truck']);
+      for (let i = 0; i < NCAR + NBUS; i++) {
+        const bus = i >= NCAR, model = bus ? 'r_bus' : POOL[(rnd() * POOL.length) | 0];
+        const tint = bus ? 0x2e9d5f : model === 'q_taxi' ? 0xf5c518 : model === 'r_truck' ? [0xf2f2ee, 0x2c3e50, 0xc0392b][(rnd() * 3) | 0] : COLS[(rnd() * COLS.length) | 0];
+        cars.push({ bus, model, tint, e: null, t: 0, v: 0, x: 0, z: 0, h: 0, stuck: 0, ghost: 0, wait: 0, len: G.VEH.info(model).L });
+      }
+      const byModel = {};
+      for (const c of cars) (byModel[c.model] || (byModel[c.model] = [])).push(c);
+      for (const k in byModel) {
+        const list = byModel[k], im = new T.InstancedMesh(G.VEH.geo(k), G.VEH.instMat(), list.length);
+        im.castShadow = true;
+        im.frustumCulled = false;
+        list.forEach((c, n) => {
+          c.im = im;
+          c.idx = n;
+          im.setColorAt(n, col.set(c.tint));
+        });
+        im.instanceColor.needsUpdate = true;
+        scene.add(im);
+        IMS.push(im);
+      }
+    } else {
+      const mat = new T.MeshLambertMaterial({ vertexColors: true });
+      // לאוטובוסים חומר נפרד וצבע בסיס לבן — חומר משותף בלי צבע מופע יצא שחור לגמרי
+      const busMat = new T.MeshLambertMaterial({ vertexColors: true });
+      const carIM = new T.InstancedMesh(carGeo, mat, NCAR), busIM = new T.InstancedMesh(busGeo, busMat, NBUS);
+      carIM.castShadow = busIM.castShadow = true;
+      carIM.frustumCulled = busIM.frustumCulled = false;
+      scene.add(carIM, busIM);
+      for (let i = 0; i < NCAR + NBUS; i++) {
+        const bus = i >= NCAR;
+        const c = { bus, idx: bus ? i - NCAR : i, im: bus ? busIM : carIM, e: null, t: 0, v: 0, x: 0, z: 0, h: 0, stuck: 0, ghost: 0, wait: 0, len: bus ? 11 : 3.9 };
+        if (!bus) carIM.setColorAt(c.idx, col.set(COLS[(rnd() * COLS.length) | 0]));
+        else busIM.setColorAt(c.idx, col.set(0xffffff));
+        cars.push(c);
+      }
+      carIM.instanceColor.needsUpdate = true;
+      busIM.instanceColor.needsUpdate = true;
+      IMS.push(carIM, busIM);
     }
-    carIM.instanceColor.needsUpdate = true;
-    busIM.instanceColor.needsUpdate = true;
 
     // ---------- מיקום והצבה ----------
     const lane = (e) => Math.min(e.w / 4, 1.8);
@@ -307,11 +335,10 @@
         q4.setFromAxisAngle(UP, c.h);
         p3.set(c.x, 0, c.z);
         m4.compose(p3, q4, s3);
-        (c.bus ? busIM : carIM).setMatrixAt(c.idx, m4);
+        c.im.setMatrixAt(c.idx, m4);
         if (c.v > 2 && Math.hypot(c.x - px, c.z - pz) < 45) nearby++;
       }
-      carIM.instanceMatrix.needsUpdate = true;
-      busIM.instanceMatrix.needsUpdate = true;
+      for (const im of IMS) im.instanceMatrix.needsUpdate = true;
     }
     return {
       update,
@@ -323,8 +350,8 @@
       obstacles(out) {
         for (const c of cars) {
           if (!c.e || Math.hypot(c.x - player.x, c.z - player.z) > 40) continue;
-          const offs = c.bus ? [-3.8, -1.3, 1.3, 3.8] : [-1.1, 1.1];
-          for (const k of offs) out.push({ x: c.x + c.dx * k, z: c.z + c.dz * k, r: c.bus ? 1.3 : 0.95 });
+          const offs = c.bus ? [-3.8, -1.3, 1.3, 3.8] : c.len > 5.5 ? [-2.2, 0, 2.2] : [-1.2, 1.2];
+          for (const k of offs) out.push({ x: c.x + c.dx * k, z: c.z + c.dz * k, r: c.bus || c.len > 5.5 ? 1.25 : 0.95 });
         }
         return out;
       },

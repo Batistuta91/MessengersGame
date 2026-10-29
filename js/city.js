@@ -1595,7 +1595,21 @@
         inst(t.grp, glowGeo, glowMat, la.length, (im, i) => setM(im, i, la[i][0], 0.08, la[i][1], 0, 1, 1, 1), false);
       }
       const ca = t.cars;
-      if (ca.length)
+      if (ca.length && G.VEH && G.CAR_MODELS) {
+        // מודלים אמיתיים: דגם לכל מכונית לפי מיקומה (קבוע בין טעינות), מופעים לכל דגם
+        const byModel = {};
+        for (const c of ca) {
+          const k = G.CAR_MODELS[(Math.abs(Math.round(c[0] * 7 + c[1] * 13)) + c[3]) % G.CAR_MODELS.length];
+          (byModel[k] || (byModel[k] = [])).push(c);
+        }
+        for (const k in byModel) {
+          const L = byModel[k];
+          inst(t.grp, G.VEH.geo(k), G.VEH.instMat(), L.length, (im, i) => {
+            setM(im, i, L[i][0], 0, L[i][1], L[i][2], 1, 1, 1);
+            im.setColorAt(i, col.set(CAR_COLS[L[i][3]]));
+          }, true);
+        }
+      } else if (ca.length)
         inst(t.grp, carGeo, carMat, ca.length, (im, i) => {
           setM(im, i, ca[i][0], 0, ca[i][1], ca[i][2], 1, 1, 1);
           im.setColorAt(i, col.set(CAR_COLS[ca[i][3]]));

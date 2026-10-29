@@ -76,6 +76,13 @@ powershell -ExecutionPolicy Bypass -File tools\convert-osm.ps1
 
 הקבצים ארוזים ב־`data/shaliach.js`, ונטענים רק כשהדמות המציאותית פעילה. את המודל בונים מחדש בעזרת הסקריפטים של Blender שנמצאים מחוץ למאגר.
 
+## רכבים
+התנועה בכבישים, המכוניות החונות, המכונית של משה, המונית ומשאית ההובלה הם מודלים אמיתיים, ולכל מכונית בתנועה צבע משלה:
+- [Realistic Car Pack](https://quaternius.itch.io/lowpoly-cars) של Quaternius (CC0).
+- [Free Low Poly Vehicles Pack](https://rgsdev.itch.io/free-low-poly-vehicles-pack) של rgsdev (CC0).
+
+המודלים הומרו ב־Blender לקובץ קומפקטי, `data/vehicles.js`, ונטענים דרך `js/vehmodels.js`. אם הקובץ לא נטען, המשחק חוזר לרכבים הפשוטים.
+
 ## קצה העיר
 כשמתקרבים לגבול המפה מופיעה אזהרה ״יצאתם מתחומי העיר — חזרו אחורה״ עם חץ לכיוון העיר. הרכב לא נתקע: אפשר להסתובב או לנסוע ברוורס. ואם בכל זאת נתקעתם, בתפריט ההשהיה יש כפתור **🆘 תקועים? חזרה לבית חב״ד**.
 
