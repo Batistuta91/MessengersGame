@@ -142,15 +142,34 @@
     attachAt(head, k, new T.Vector3(cx, top - 0.032, cz - 0.035), root);
   }
 
-  // ציציות: שתי פינות בכל צד, 8 חוטים לכל פינה, מתחת לשולי הז׳קט
-  function addTzitzit(root, pelvis, body) {
+  // ציציות: שתי פינות בכל צד, 8 חוטים לכל פינה, מתחת לשולי הז׳קט.
+  // המיקום נמדד מהבגד עצמו בגובה המותן — צמוד לצדדים גם בדמות רזה וגם בדמות מלאה
+  function addTzitzit(root, pelvis, body, cloth) {
     const bb = new T.Box3().setFromObject(body), H = bb.max.y - bb.min.y, hipY = bb.min.y + H * 0.5, len = H * 0.24;
+    const src = cloth || body;
+    const band = new T.Box3();
+    // רק נקודות של הגוף והירכיים (לפי עצם השליטה) — בלי השרוולים שתלויים ליד המותן
+    src.skeleton.update();
+    const pos = src.geometry.attributes.position, si = src.geometry.attributes.skinIndex, sw = src.geometry.attributes.skinWeight, bones = src.skeleton.bones, v = new T.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      let bi = si.getX(i), bw = sw.getX(i);
+      if (sw.getY(i) > bw) { bi = si.getY(i); bw = sw.getY(i); }
+      if (sw.getZ(i) > bw) { bi = si.getZ(i); bw = sw.getZ(i); }
+      if (sw.getW(i) > bw) bi = si.getW(i);
+      if (!/^(pelvis|spine_0[12]|thigh_)/.test(bones[bi].name)) continue;
+      v.fromBufferAttribute(pos, i);
+      src.boneTransform(i, v);
+      v.applyMatrix4(src.matrixWorld);
+      if (v.y > hipY - 0.06 && v.y < hipY + 0.04) band.expandByPoint(v);
+    }
+    const cx = (band.min.x + band.max.x) / 2, cz = (band.min.z + band.max.z) / 2;
+    const hx = (band.max.x - band.min.x) / 2 + 0.003, dz = (band.max.z - band.min.z) * 0.22;
     const mat = new T.MeshStandardMaterial({ color: 0xf6f6f0, roughness: 0.9 });
     const geo = new T.CylinderGeometry(0.0035, 0.003, len, 4);
     geo.translate(0, -len / 2, 0);
     const knotGeo = new T.CylinderGeometry(0.012, 0.012, 0.05, 6);
     for (const sx of [-1, 1])
-      for (const dz of [0.06, -0.07]) {
+      for (const fz of [1, -1]) {
         const tassel = new T.Group();
         for (let k = 0; k < 8; k++) {
           const s = new T.Mesh(geo, mat);
@@ -163,7 +182,7 @@
         const knot = new T.Mesh(knotGeo, mat);
         knot.position.y = -0.02;
         tassel.add(knot);
-        attachAt(pelvis, tassel, new T.Vector3(sx * 0.205, hipY, dz), root);
+        attachAt(pelvis, tassel, new T.Vector3(cx + sx * hx, hipY, cz + fz * dz), root);
       }
   }
 
@@ -224,7 +243,11 @@
     const retarget = makeRetarget(srcRoot, root, bones);
     if (opts.hat) addHat(root, head, body, hair, opts.hat);
     if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah);
-    if (opts.tzitzit) addTzitzit(root, pelvis, body);
+    if (opts.tzitzit) {
+      let cloth = null;
+      root.traverse((o) => { if (o.isSkinnedMesh && /suit/i.test(o.name)) cloth = o; });
+      addTzitzit(root, pelvis, body, cloth);
+    }
 
     const mixer = new T.AnimationMixer(srcRoot);
     const acts = {};
