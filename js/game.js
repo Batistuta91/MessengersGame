@@ -356,37 +356,37 @@
       look: { shirt: 0x2ecc71, pants: 0x222222, skin: 0xf2c6a2, hair: 0x6b4423, shorts: true, shoes: 0xffffff } },
   ];
   const npcs = [], npcById = {};
-  // דמויות מציאותיות לדמויות הקבועות — רשימה מפורשת (ילדים, נשים ודמויות אחרות נשארות קלאסיות)
+  // דמויות מציאותיות לדמויות הקבועות — רשימה מפורשת של הדגם בלבד. כל השאר (אביזרים, שיער, זקן, כיפה, עור)
+  // נלקח מ-look המקורי, כדי שהדמות תישאר מי שהיא. לא ברשימה (נשים, ילדים, הרץ עידו) — נשארים קלאסיים
   const REAL_NPC = {
-    moshe: { k: 'moshe', hat: 'homburg', hair: 0x8a8a8a, beard: 0xd0d0d0, tzitzit: true },
-    yossi: { k: 'secular1', hair: 0x4a2f1b },
-    cohen: { k: 'dati', kippah: 0x1b3a8a, hair: 0x8a8a8a, beard: 0x8a8a8a },
-    daniel: { k: 'secular2', hair: 0x222222 },
-    roi: { k: 'secular1', hair: 0x2a1a10 },
-    ido: { k: 'secular1', hair: 0x6b4423 },
-    avraham: { k: 'dati', kippah: 0xf2f2f2, hair: 0xdddddd, beard: 0xe0e0e0 },
-    shimon: { k: 'secular2', hair: 0x555555 },
-    alon: { k: 'secular1', hair: 0x222222 },
-    zalman: { k: 'haredi', hat: 'homburg', hair: 0x777777, beard: 0x9a9a9a, tzitzit: true },
-    pt_shimshon: { k: 'secular2', hair: 0x333333 },
-    pt_avi: { k: 'dati', kippah: 0x2e7d4f, hair: 0x2a1a10, beard: 0x2a1a10 },
-    pt_moti: { k: 'secular1', hair: 0x3a2a1a },
-    pt_rachamim: { k: 'dati', kippah: 0x111111, hair: 0x555555, beard: 0x666666 },
-    pt_father: { k: 'secular1', hair: 0x4a2f1b },
-    pt_yoel: { k: 'moshe', hat: 'homburg', hair: 0xdddddd, beard: 0xf0f0f0, tzitzit: true },
+    moshe: 'moshe', yossi: 'secular1', cohen: 'secular2', daniel: 'suit', roi: 'worker', avraham: 'moshe', shimon: 'dati', alon: 'striped', zalman: 'haredi',
+    pt_shimshon: 'dati', pt_avi: 'striped', pt_moti: 'secular1', pt_rachamim: 'dati', pt_father: 'secular2', pt_yoel: 'moshe',
   };
-  let animDt = 0;
+  function realOpts(L) {
+    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
+    if (L.hat) Object.assign(o, { hat: 'homburg', tzitzit: true, hair: L.hair !== undefined ? L.hair : 0x3a2a1a });
+    // עור: יחס לגוון הבהיר של הדגם, כדי שגם דמות כהה תישאר כהה
+    if (L.skin !== undefined) {
+      const c = new T.Color(L.skin), m = Math.max(c.r, c.g, c.b);
+      if (m < 0.88) o.skin = c.multiplyScalar(1 / Math.max(0.5, m * 1.05 + 0.1)).getHex();
+    }
+    return o;
+  }
+  let animDt = 0, rcBusy = false;
+  // נטען רק כשמתקרבים, דמות אחת בכל פעם: בלי תקיעה בטעינה ובלי זיכרון מיותר בטלפון
   function attachRealNPC(n) {
-    if (S.settings.realChar === false || !G.loadNPCChar || n.rc || n.rcLoading) return;
-    // בפתח תקווה ״משה״ הוא ר׳ מנחם — חרדי צעיר יותר, זקן כהה
-    const o = n.id === 'moshe' && CITY === 'pt' ? { k: 'haredi', hat: 'homburg', hair: 0x2a1a10, beard: 0x3a2a1a, tzitzit: true } : REAL_NPC[n.id];
-    if (!o) return;
-    n.rcLoading = true;
-    G.loadNPCChar(ASSET_V, o.k, o, (rc) => {
+    if (S.settings.realChar === false || !G.loadNPCChar || n.rc || n.rcLoading || rcBusy) return;
+    const key = n.id === 'moshe' && CITY === 'pt' ? 'haredi' : REAL_NPC[n.id];
+    if (!key) return;
+    n.rcLoading = rcBusy = true;
+    const opts = realOpts(n.def.look);
+    if (key === 'moshe') opts.shirtFront = true;
+    G.loadNPCChar(ASSET_V, key, opts, (rc) => {
+      rcBusy = false;
       n.rc = rc;
       n.p.group.add(rc.group);
       applyRealChar();
-    });
+    }, () => (rcBusy = false));
   }
   function addNPC(d) {
     const p = G.makePerson(d.look);
@@ -398,7 +398,6 @@
     const n = { id: d.id, def: d, x: d.x, z: d.z, rot: d.rot || 0, rotT: d.rot || 0, phase: 0, s: 0, p, icon, iconKind: null, hidden: false, ctrl: null };
     npcs.push(n);
     npcById[d.id] = n;
-    attachRealNPC(n);
     return n;
   }
   // בפתח תקווה: במקום משה — ר׳ מנחם, השליח של העיר; דמויות פרק 1 נשארות בהוד השרון
@@ -1930,7 +1929,6 @@
       toast('טוען את הדמויות המציאותיות...', 'gold');
       loadRealChar();
     }
-    if (S.settings.realChar) for (const n of npcs) attachRealNPC(n);
     applyRealChar();
     refreshSettingsLabels();
     save();
@@ -2024,12 +2022,12 @@
     },
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;
-  // משימת פסח (אחרי פרק 2, בשתי הערים) — מתחברת למנהל המשימות של העיר
+  // משימת פסח (רק בפתח תקווה, אחרי הסיבוב עם ברסלב) — מתחברת למנהל המשימות של העיר
   const PS = G.makePesach ? G.makePesach({ scene, W, A, player, van, npcById, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, results: queueResults, say: (n) => talkTo(n), shot: (s) => { camShot = s; } }) : null;
   if (PS) M = G.combineMissions(M, PS);
   EV = G.makeEvents ? G.makeEvents({ scene, W, A, player, van, addNPC, toast, addJoy, addCommunity, save, isTouch, addVehicle, removeVehicle, enterVehicle, exitVehicle, get drv() { return drv; }, get S() { return S; }, radioLabel: (t) => showRadioLabel(t), isTouch, say: (n) => talkTo(n), trafficObstacles: () => { const o = []; if (TR) TR.obstacles(o); return o; } }) : null;
   // מאפיית המצות (משחק מיומנות ליד המטבח של בית חב״ד)
-  const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; }, onResult: (n, quit) => PS && PS.onBake(n, quit) }) : null;
+  const MZ = G.makeMatzah ? G.makeMatzah({ scene, W, A, isTouch, get S() { return S; }, toast, addJoy, addCommunity, save, onClose: () => { mode = 'play'; }, isOpen: () => !!PS && PS.bakeryOpen(), onResult: (n, quit) => PS && PS.onBake(n, quit) }) : null;
   // דפי תניא נסתרים בעיר
   const CL = G.makeCollectibles ? G.makeCollectibles({ scene, W, A, player, get S() { return S; }, toast, addJoy, addCommunity, save }) : null;
   resize();
@@ -2371,10 +2369,15 @@
       n.p.group.position.set(n.x, bob, n.z);
       n.p.group.rotation.y = n.rot;
       if (n.sit) sitPose(n.p);
+      // דמות מציאותית: נטענת ומתעדכנת רק ליד השחקן (או הרכב שבו הוא נוהג)
+      const nearCam = Math.hypot(n.x - (drv ? drv.x : player.x), n.z - (drv ? drv.z : player.z));
+      if (!n.rc && nearCam < 140) attachRealNPC(n);
       if (n.rc && n.rc.group.visible) {
-        // דמות מציאותית: בלי קפיצת ההליכה הקלאסית; מתעדכנת רק כשהיא קרובה לשחקן
         n.p.group.position.y = n.sit ? 0.57 - n.rc.hipSit : 0;
-        if (Math.hypot(n.x - player.x, n.z - player.z) < 90) n.rc.update(animDt, { moving, spd: 2.6, sit: !!n.sit, talk: !!(dlg && dlg.npc === n) });
+        if (nearCam < 90) {
+          n.p.group.updateMatrixWorld(true);
+          n.rc.update(animDt, { moving, spd: n.walkSpeed ? n.walkSpeed / 1.6 : 2.6, sit: !!n.sit, talk: !!(dlg && dlg.npc === n), t, bop: n.id === 'roi' && !S.flags.roiAttention, phoneUp: n.id === 'daniel' && !n.ctrl && m.targets.daniel !== 'accepted' && !(m.targets.daniel === 'later' && m.elapsed >= m.laterAt) });
+        }
       }
       const k = iconFor(n);
       if (k !== n.iconKind) {
@@ -3222,7 +3225,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, get PS() { return PS; },
       player, van, npcById, keys, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 

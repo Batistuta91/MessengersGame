@@ -15,9 +15,10 @@
 
     // ---------- שלט על הקיר ליד המטבח ----------
     const fr = W.chabadFrame;
+    let sign = null;
     if (fr) {
       const tex = G.textTex('🫓 מאפיית מצות', { w: 128, h: 26, size: 15, bg: '#c98a3a', fg: '#ffffff', border: '#7b4a12' });
-      const sign = new T.Mesh(new T.PlaneGeometry(2.2, 0.45), new T.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
+      sign = new T.Mesh(new T.PlaneGeometry(2.2, 0.45), new T.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
       sign.position.set(spot.x + Math.sin(fr.ang) * 0.08, 2.9, spot.z + Math.cos(fr.ang) * 0.08);
       sign.rotation.y = fr.ang;
       scene.add(sign);
@@ -691,7 +692,10 @@
       zone: () => (st ? zoneOf() : null),
       tick: (dt) => update(dt),
       interactable(player) {
-        if (Math.hypot(player.x - spot.x, player.z - spot.z) > 1.9) return null;
+        // המאפייה קיימת רק בפתח תקווה, ורק מרגע שמגיע זמן משימת המצות (אחרי הסיבוב עם ברסלב)
+        const open = !api.isOpen || api.isOpen();
+        if (sign) sign.visible = open;
+        if (!open || Math.hypot(player.x - spot.x, player.z - spot.z) > 1.9) return null;
         return { label: '🫓 להיכנס למאפיית המצות' + (S().matzahBest ? ' (שיא: ' + S().matzahBest + ')' : ''), x: spot.x, z: spot.z };
       },
     };

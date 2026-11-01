@@ -1,5 +1,5 @@
 // משימת פסח: ״מצה שמורה לכל השכונה״ — אופים במאפייה, מחלקים בעיר, וסדר משותף מול בית חב״ד
-// עובדת בשתי הערים; נפתחת אחרי פרק 2. משתלבת עם מנהל המשימות של העיר (combineMissions)
+// רק בפתח תקווה; נפתחת אחרי הסיבוב עם ברסלב. משתלבת עם מנהל המשימות של העיר (combineMissions)
 (function () {
   'use strict';
   const G = window.G, T = THREE;
@@ -20,10 +20,14 @@
     const q = () => S().quests.pesach;
     // נפתחת אחרי הסיבוב עם ברסלב (משימה 3 בפרק 2), וסוגרת את הפרק
     const ch2Done = () => ['ptB', 'pt3'].some((id) => S().quests[id] && S().quests[id].status === 'complete');
-    const active = () => q().status === 'active';
+    // המשימה, המאפייה והסדר קיימים רק בפתח תקווה. בהוד השרון המשימה לא מוצעת ולא פעילה;
+    // שמירה ישנה שבה היא התחילה שם ממשיכה כשמגיעים לפתח תקווה
+    const PT = city === 'pt';
+    const active = () => PT && q().status === 'active';
+    const canOffer = () => PT && ch2Done();
 
     // מי מקבל מצה: דמויות קבועות בעיר הנוכחית שגלויות עכשיו
-    const POOL = city === 'pt' ? ['pt_shimshon', 'pt_avi', 'pt_moti', 'pt_rachamim', 'pt_yoel', 'pt_father'] : ['cohen', 'roi', 'daniel', 'yossi', 'zalman', 'avraham'];
+    const POOL = ['pt_shimshon', 'pt_avi', 'pt_moti', 'pt_rachamim', 'pt_yoel', 'pt_father'];
     function pickRecipients() {
       const list = POOL.filter((id) => N(id) && !N(id).hidden).slice(0, 5);
       q().recips = list;
@@ -148,12 +152,6 @@
 
     // ---------- חלוקה ----------
     const LINES = {
-      cohen: ['מצה שמורה? בעבודת יד? ...אבא שלי היה קונה כזאת כל שנה. תודה, שליח.', 'בסדר שלי היא תהיה במרכז השולחן.'],
-      roi: ['אחי, מה זה — מצה עגולה? זה כמו פיצה בלי כלום!', 'סתם... תודה. אני אביא אותה לסבתא, היא תתרגש.'],
-      daniel: ['רגע, אתם אופים את זה בעצמכם? בשמונה עשרה דקות?', 'אני חייב לבוא לראות את המאפייה הזאת.'],
-      yossi: ['מצה בשבילי? איזה קטע — אני עושה השנה סדר ראשון לבד בדירה.', 'אולי... אולי בעצם אבוא לסדר אצלכם?'],
-      zalman: ['מצה שמורה... כמו פעם, בבית הכנסת הישן.', '(מחייך) השנה אני אגיד ״הא לחמא עניא״ בנוסח של אבא שלי.'],
-      avraham: ['שליח! אתה זוכר את הזקן מהפארק!', 'הנכדים יגיעו בסדר — ויקבלו מצה אמיתית.'],
       pt_shimshon: ['מצות?! אני מוכר ירקות לסדר כל השבוע — ועכשיו גם מקבל!', 'קח חזרת על חשבון הבית.'],
       pt_avi: ['מצה שמורה — והיא עוד חמה מהתנור!', 'ואני אתן לך זעתר לסדר. עסקה.'],
       pt_moti: ['לפרנסה, צדקה; לפסח — מצה. אתם חושבים על הכל.', 'שנה הבאה בירושלים!'],
@@ -297,13 +295,14 @@
     return {
       onBake,
       activeQuest: () => (active() ? 'pesach' : null),
-      callOffer: () => (ch2Done() && q().status === 'locked' ? { id: 'pesach', nodes: OFFER() } : null),
+      callOffer: () => (canOffer() && q().status === 'locked' ? { id: 'pesach', nodes: OFFER() } : null),
       mosheDialog: () => {
         if (active()) return { a: { s: 'npc', t: HINT() } };
-        if (ch2Done() && (q().status === 'locked' || q().status === 'idle')) return OFFER();
+        if (canOffer() && (q().status === 'locked' || q().status === 'idle')) return OFFER();
         return null;
       },
-      mosheIcon: () => (active() ? (q().step === 'sedertime' ? false : 'hint') : ch2Done() && q().status !== 'complete' ? 'mission' : null),
+      bakeryOpen: () => canOffer() || active() || (PT && q().status === 'complete'),
+      mosheIcon: () => (active() ? (q().step === 'sedertime' ? false : 'hint') : canOffer() && q().status !== 'complete' ? 'mission' : null),
       npcDialog,
       iconFor: (n) => (active() && q().step === 'deliver' && q().recips.includes(n.id) && !q().delivered[n.id] ? 'alert' : null),
       interactables() {

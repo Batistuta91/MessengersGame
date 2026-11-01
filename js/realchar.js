@@ -41,7 +41,8 @@
     const a = new T.Quaternion(), b = new T.Quaternion(), rootQ = new T.Quaternion(), v = new T.Vector3();
     return function () {
       srcRoot.updateMatrixWorld(true);
-      dstRoot.updateMatrixWorld(true);
+      // מעדכן גם את ההורים: כל החישוב על מיקום עדכני, גם כשהדמות זזה או מסתובבת
+      dstRoot.updateWorldMatrix(true, true);
       dstRoot.getWorldQuaternion(rootQ);
       // אגן: גם תזוזה (ישיבה, קפיצה) — מוקטנת לפי יחס הגבהים
       v.copy(wp(sp)).sub(sPos0).multiplyScalar(k).add(dPos0);
@@ -186,6 +187,64 @@
       }
   }
 
+  // מדידת הגוף בלי השרוולים: נקודות הבגד ששייכות לעצמות הגוף והירכיים בטווח גובה
+  function bandOf(src, y0, y1, re) {
+    src.skeleton.update();
+    const pos = src.geometry.attributes.position, si = src.geometry.attributes.skinIndex, sw = src.geometry.attributes.skinWeight, bones = src.skeleton.bones, v = new T.Vector3(), band = new T.Box3();
+    for (let i = 0; i < pos.count; i++) {
+      let bi = si.getX(i), bw = sw.getX(i);
+      if (sw.getY(i) > bw) { bi = si.getY(i); bw = sw.getY(i); }
+      if (sw.getZ(i) > bw) { bi = si.getZ(i); bw = sw.getZ(i); }
+      if (sw.getW(i) > bw) bi = si.getW(i);
+      if (!re.test(bones[bi].name)) continue;
+      v.fromBufferAttribute(pos, i);
+      src.boneTransform(i, v);
+      v.applyMatrix4(src.matrixWorld);
+      if (v.y > y0 && v.y < y1) band.expandByPoint(v);
+    }
+    return band;
+  }
+  const accMat = (color, rough) => new T.MeshStandardMaterial({ color, roughness: rough === undefined ? 0.8 : rough });
+  // אביזרים מההגדרה המקורית של הדמות — כדי שכל דמות תישאר מי שהיא
+  function addBackpack(root, bone, src, H, y0, color) {
+    const yc = y0 + H * 0.72, b = bandOf(src, yc - 0.1, yc + 0.1, /^spine_0/);
+    const bag = new T.Mesh(new T.BoxGeometry(0.32, 0.44, 0.16), accMat(color));
+    bag.castShadow = true;
+    attachAt(bone, bag, new T.Vector3((b.min.x + b.max.x) / 2, yc, b.min.z - 0.075), root);
+  }
+  function addApron(root, bone, src, H, y0, color) {
+    const yc = y0 + H * 0.52, b = bandOf(src, yc - 0.06, yc + 0.06, /^(pelvis|spine_0|thigh_)/);
+    const ap = new T.Mesh(new T.BoxGeometry((b.max.x - b.min.x) * 0.9, H * 0.34, 0.012), accMat(color, 0.9));
+    ap.castShadow = true;
+    attachAt(bone, ap, new T.Vector3((b.min.x + b.max.x) / 2, yc + H * 0.02, b.max.z + 0.012), root);
+  }
+  function addCap(root, head, body, hair, color) {
+    const { top, ring, cx, cz } = headRing(body, hair), r = (ring.max.x - ring.min.x) / 2 + 0.008;
+    const cap = new T.Group();
+    const dome = new T.Mesh(new T.SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), accMat(color));
+    dome.scale.y = 0.92;
+    dome.scale.z = (ring.max.z - ring.min.z) / 2 / r + 0.03;
+    const visor = new T.Mesh(new T.BoxGeometry(r * 1.6, 0.012, 0.09), accMat(color));
+    visor.position.set(0, 0.002, (ring.max.z - ring.min.z) / 2 + 0.04);
+    visor.rotation.x = 0.12;
+    cap.add(dome, visor);
+    cap.traverse((o) => o.isMesh && (o.castShadow = true));
+    attachAt(head, cap, new T.Vector3(cx, top - r * 0.86, cz), root);
+  }
+  function addHeadphones(root, head, body, hair) {
+    const { top, ring, cx, cz } = headRing(body, hair), r = (ring.max.x - ring.min.x) / 2 + 0.018;
+    const hp = new T.Group();
+    const arc = new T.Mesh(new T.TorusGeometry(r, 0.008, 6, 24, Math.PI), accMat(0x222222));
+    hp.add(arc);
+    for (const s of [-1, 1]) {
+      const cup = new T.Mesh(new T.CylinderGeometry(0.05, 0.05, 0.035, 12), accMat(0xe74c3c, 0.5));
+      cup.rotation.z = Math.PI / 2;
+      cup.position.x = s * r;
+      hp.add(cup);
+    }
+    attachAt(head, hp, new T.Vector3(cx, top - r - 0.004, cz), root);
+  }
+
   // ---------- טעינת קבצי נתונים (תגית script — עובד גם מ-file://) ----------
   const scripts = {};
   const loadScript = (src) =>
@@ -212,10 +271,11 @@
     const mh = await parse(buf);
     const root = mh.scene;
     let body = null, hair = null, head = null, pelvis = null;
-    const bones = [];
+    const bones = [], byName = {};
     root.traverse((o) => {
       if (o.isBone) {
         bones.push(o);
+        byName[o.name] = o;
         if (o.name === 'head') head = o;
         if (o.name === 'pelvis') pelvis = o;
       }
@@ -223,6 +283,7 @@
       o.castShadow = true;
       o.frustumCulled = false;
       if (/short0/i.test(o.name)) hair = o;
+      if (opts.noBeard && /beard|moustache/i.test(o.name)) o.visible = false;
       if (/body|base/i.test(o.name) && (!body || o.geometry.attributes.position.count > body.geometry.attributes.position.count)) body = o;
       (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
         if (m.map) m.map.encoding = T.LinearEncoding;
@@ -235,6 +296,8 @@
         if (/beard|moustache/i.test(m.name)) m.color.set(opts.beard !== undefined ? opts.beard : 0x5a4030);
         else if (/short0|eyebrow/i.test(m.name)) m.color.set(opts.hair !== undefined ? opts.hair : 0x5a4030);
         if (/shoes/i.test(m.name)) m.color.set(0x222222);
+        // גוון עור מההגדרה המקורית (בהיר = בלי שינוי)
+        if (opts.skin !== undefined && o === body) m.color.set(opts.skin);
         m.needsUpdate = true;
       });
     });
@@ -243,10 +306,28 @@
     const retarget = makeRetarget(srcRoot, root, bones);
     if (opts.hat) addHat(root, head, body, hair, opts.hat);
     if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah);
-    if (opts.tzitzit) {
-      let cloth = null;
-      root.traverse((o) => { if (o.isSkinnedMesh && /suit/i.test(o.name)) cloth = o; });
-      addTzitzit(root, pelvis, body, cloth);
+    let cloth = null;
+    root.traverse((o) => { if (o.isSkinnedMesh && /suit/i.test(o.name)) cloth = o; });
+    if (opts.tzitzit) addTzitzit(root, pelvis, body, cloth);
+    const bb0 = new T.Box3().setFromObject(body), H0 = bb0.max.y - bb0.min.y;
+    // בדגם הוסרה העניבה ונשאר פתח בחזה: הצד הפנימי של הבגד נצבע לבן, וכך רואים דרך הפתח חולצה
+    if (opts.shirtFront && cloth) {
+      const cm = cloth.material;
+      cm.side = T.DoubleSide;
+      cm.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.9);').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n if (!gl_FrontFacing) totalEmissiveRadiance += vec3(0.4);');
+      };
+      cm.customProgramCacheKey = () => 'shirtInside';
+      cm.needsUpdate = true;
+    }
+    if (opts.backpack !== undefined) addBackpack(root, byName.spine_03, cloth || body, H0, bb0.min.y, opts.backpack);
+    if (opts.apron !== undefined) addApron(root, pelvis, cloth || body, H0, bb0.min.y, opts.apron);
+    if (opts.cap !== undefined) addCap(root, head, body, hair, opts.cap);
+    if (opts.headphones) addHeadphones(root, head, body, hair);
+    if (opts.phone) {
+      const ph = new T.Mesh(new T.BoxGeometry(0.075, 0.15, 0.012), accMat(0x111111, 0.3));
+      attachAt(byName.hand_r, ph, byName.hand_r.getWorldPosition(new T.Vector3()), root);
+      ph.position.y += 0.06;
     }
 
     const mixer = new T.AnimationMixer(srcRoot);
@@ -280,6 +361,21 @@
       cur = a;
       curName = name;
     }
+    // סיבוב עצם סביב ציר בעולם, ואימות איבר לכיוון נקודה — לתנועות שאין בקליפים (טלפון, ראש בקצב)
+    const qa = new T.Quaternion(), qb = new T.Quaternion(), va = new T.Vector3(), vb = new T.Vector3(), vc = new T.Vector3();
+    function turn(bone, q) {
+      bone.getWorldQuaternion(qa).premultiply(q);
+      bone.parent.getWorldQuaternion(qb).invert();
+      bone.quaternion.copy(qb.multiply(qa));
+      bone.updateMatrixWorld(true);
+    }
+    function aim(bone, kid, target) {
+      bone.getWorldPosition(va);
+      kid.getWorldPosition(vb);
+      vb.sub(va).normalize();
+      vc.copy(target).sub(va).normalize();
+      turn(bone, new T.Quaternion().setFromUnitVectors(vb, vc));
+    }
     play('Idle_Loop');
     // כל דמות מתחילה בנקודה אחרת באנימציה — לא כולם זזים יחד
     mixer.update(Math.random() * 3);
@@ -300,6 +396,17 @@
         } else play(st.talk ? 'Idle_Talking_Loop' : 'Idle_Loop');
         mixer.update(dt);
         retarget();
+        if (st.bop) {
+          group.getWorldDirection(vc);
+          turn(head, new T.Quaternion().setFromAxisAngle(vc, Math.sin(st.t * 7) * 0.14));
+        }
+        if (st.phoneUp) {
+          // יד לאוזן: מרפק למטה והחוצה, אמה אל הצד של הראש
+          const fwd = group.getWorldDirection(new T.Vector3()), side = new T.Vector3(0, 1, 0).cross(fwd).normalize();
+          const sh = byName.upperarm_r.getWorldPosition(new T.Vector3()), ear = head.getWorldPosition(new T.Vector3()).addScaledVector(side, -0.11).addScaledVector(fwd, 0.03);
+          aim(byName.upperarm_r, byName.lowerarm_r, sh.clone().addScaledVector(side, -0.14).addScaledVector(fwd, 0.1).add(new T.Vector3(0, -0.3, 0)));
+          aim(byName.lowerarm_r, byName.hand_r, ear);
+        }
       },
     };
   }
@@ -310,7 +417,7 @@
       .then((an) => {
         const buf = b64(window.SHALIACH_GLB);
         window.SHALIACH_GLB = null;
-        return buildChar(buf, an, { hat: 'chabad', tzitzit: true });
+        return buildChar(buf, an, { hat: 'chabad', tzitzit: true, shirtFront: true });
       })
       .then(onReady)
       .catch((e) => {
@@ -318,11 +425,14 @@
         if (onFail) onFail(e);
       });
   };
-  // דמות ברחוב: key = moshe | haredi | dati | secular1 | secular2 (קובץ data/npc_<key>.js)
-  G.loadNPCChar = function (ver, key, opts, onReady) {
+  // דמות ברחוב: key = moshe | haredi | suit | worker | dati | striped | secular1 | secular2 (קובץ data/npc_<key>.js)
+  G.loadNPCChar = function (ver, key, opts, onReady, onFail) {
     Promise.all([anims(ver), loadScript('data/npc_' + key + '.js?v=' + ver)])
       .then(([an]) => buildChar(b64(window.NPC_GLB[key]), an, opts))
       .then(onReady)
-      .catch((e) => console.error('npcchar', key, e));
+      .catch((e) => {
+        console.error('npcchar', key, e);
+        if (onFail) onFail(e);
+      });
   };
 })();

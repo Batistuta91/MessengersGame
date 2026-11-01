@@ -1544,8 +1544,9 @@
               });
               if (ok && Math.hypot(cx - SP.vanStart.x, cz - SP.vanStart.z) > 8) {
                 tileAt(cx, cz).cars.push([cx, cz, Math.atan2(ux, uz) + (rnd() < 0.5 ? Math.PI : 0), (rnd() * 11) | 0]);
-                W.addCircle(cx + ux * 1.1, cz + uz * 1.1, 0.95);
-                W.addCircle(cx - ux * 1.1, cz - uz * 1.1, 0.95);
+                // הדגמים הארוכים מגיעים ל־5.2 מטר — התנגשות לכל האורך
+                W.addCircle(cx + ux * 1.6, cz + uz * 1.6, 1);
+                W.addCircle(cx - ux * 1.6, cz - uz * 1.6, 1);
               }
             }
           }
