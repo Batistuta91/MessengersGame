@@ -14,7 +14,7 @@
     const NP = {
       yaakov: api.addNPC({ id: 'ev_yaakov', name: 'יעקב', role: 'מחפש סידור', x: 0, z: 0, look: { shirt: 0xdfe6ee, pants: 0x3b3b44, skin: 0xe2b088, hair: 0x777777, kippah: 0x222222 } }),
       haim: api.addNPC({ id: 'ev_haim', name: 'חיים', role: 'בעל חנות', x: 0, z: 0, look: { shirt: 0xf3efe2, apron: 0x9c6b3c, pants: 0x4b3b2b, skin: 0xc98e62, cap: 0x2e7d4f } }),
-      nachman: api.addNPC({ id: 'ev_nachman', name: 'נחמן', role: 'מהניידת של ברסלב', x: 0, z: 0, look: { shirt: 0xffffff, pants: 0x2b2b2b, skin: 0xe2b088, kippah: 0xffffff, beard: 0x5a3a1a, tzitzit: true } }),
+      nachman: api.addNPC({ id: 'ev_nachman', name: 'נחמן', role: 'מהניידת של ברסלב', x: 0, z: 0, look: { shirt: 0xffffff, pants: 0x2b2b2b, skin: 0xe2b088, kippah: 0xffffff, kippahSize: 1.5, hair: 0x2a1c12, beard: 0x3a2616, tzitzit: true } }),
       david: api.addNPC({ id: 'ev_david', name: 'דוד', role: 'פתח חנות חדשה', x: 0, z: 0, look: { shirt: 0x2e86de, pants: 0x2c3e50, skin: 0xe8c0a0, hair: 0x3a2a1a } }),
       zaken: api.addNPC({ id: 'ev_zaken', name: 'סבא שלמה', role: 'מחכה לאוטובוס', x: 0, z: 0, look: { shirt: 0xffffff, jacket: 0x4a4a55, pants: 0x3b3b44, skin: 0xe2b088, kippah: 0x222222, beard: 0xeeeeee } }),
       levi: api.addNPC({ id: 'ev_levi', name: 'משפחת לוי', role: 'חדשים בשכונה', x: 0, z: 0, look: { shirt: 0x7fb3d5, pants: 0x2c3e50, skin: 0xf0c8a0, hair: 0x4a2f1b } }),

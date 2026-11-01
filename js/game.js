@@ -305,12 +305,13 @@
   let RC = null, rcLoading = false;
   const oldParts = [player.p.legL, player.p.legR, player.p.torso, player.p.armL, player.p.armR, player.p.head];
   const ASSET_V = (/[?&]v=([^&]+)/.exec((document.querySelector('script[src*="js/game.js"]') || {}).src || '') || [])[1] || '1';
+  const rcWalkers = []; // עוברות אורח עם דמות מציאותית
   function applyRealChar() {
     const on = S.settings.realChar !== false && !!RC;
     for (const o of oldParts) o.visible = !on;
     if (RC) RC.group.visible = on;
     const onN = S.settings.realChar !== false;
-    for (const n of npcs) {
+    for (const n of npcs.concat(rcWalkers)) {
       if (!n.rc) continue;
       n.rc.group.visible = onN;
       for (const part of [n.p.legL, n.p.legR, n.p.torso, n.p.armL, n.p.armR, n.p.head]) part.visible = !onN;
@@ -386,7 +387,7 @@
     { id: 'roi', name: 'רועי', role: 'עובד תחנת הדלק', x: 54, z: -48.3, rot: Math.PI / 4,
       look: { shirt: 0xe85d2a, pants: 0x2d3a4a, skin: 0xc98e62, cap: 0x1f3f8f, headphones: true } },
     { id: 'ido', name: 'עידו', role: 'הרץ מהפארק', x: 45, z: 45, rot: 0,
-      look: { shirt: 0x2ecc71, pants: 0x222222, skin: 0xf2c6a2, hair: 0x6b4423, shorts: true, shoes: 0xffffff } },
+      look: { shirt: 0x1f5fc4, pants: 0x17181c, skin: 0xf2c6a2, hair: 0x2a1c12, shoes: 0xf2f2f2 } },
   ];
   const npcs = [], npcById = {};
   // דמויות מציאותיות לדמויות הקבועות — רשימה מפורשת של הדגם בלבד. כל השאר (אביזרים, שיער, זקן, כיפה, עור)
@@ -394,9 +395,10 @@
   const REAL_NPC = {
     moshe: 'moshe', yossi: 'secular1', cohen: 'secular2', daniel: 'suit', roi: 'worker', avraham: 'moshe', shimon: 'dati', alon: 'striped', zalman: 'haredi',
     pt_shimshon: 'dati', pt_avi: 'striped', pt_moti: 'secular1', pt_rachamim: 'dati', pt_father: 'secular2', pt_yoel: 'moshe',
+    maya: 'maya', ido: 'ido', ev_nachman: 'nachman',
   };
   function realOpts(L) {
-    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
+    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, kippahSize: L.kippahSize, tichel: L.tichel, shoes: L.shoes, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
     if (L.hat) Object.assign(o, { hat: 'homburg', tzitzit: true, hair: L.hair !== undefined ? L.hair : 0x3a2a1a });
     // עור: יחס לגוון הבהיר של הדגם, כדי שגם דמות כהה תישאר כהה
     if (L.skin !== undefined) {
@@ -418,6 +420,16 @@
       rcBusy = false;
       n.rc = rc;
       n.p.group.add(rc.group);
+      applyRealChar();
+    }, () => (rcBusy = false));
+  }
+  function attachRealWalker(w) {
+    if (S.settings.realChar === false || !G.loadNPCChar || w.rc || w.rcLoading || rcBusy) return;
+    w.rcLoading = rcBusy = true;
+    G.loadNPCChar(ASSET_V, w.rcKey, Object.assign(realOpts(w.look), { top: w.look.shirt, bottom: w.look.pants, scale: 1.02 }), (rc) => {
+      rcBusy = false;
+      w.rc = rc;
+      w.p.group.add(rc.group);
       applyRealChar();
     }, () => (rcBusy = false));
   }
@@ -478,11 +490,12 @@
     const m = p.pts[(p.pts.length / 2) | 0];
     return Math.hypot(m[0] - (SPOT.playerStart ? SPOT.playerStart.x : 0), m[1] - (SPOT.playerStart ? SPOT.playerStart.z : 0)) < 420;
   }) : null;
-  function spawnWalker() {
+  function spawnWalker(woman) {
     const ring = W.rings ? W.rings[(wr() * W.rings.length) | 0] : [0, 0];
-    const look = { shirt: SHIRTS[(wr() * SHIRTS.length) | 0], pants: [0x2c3e50, 0x333333, 0x5d4037, 0x1f3f8f][(wr() * 4) | 0], skin: SKINS[(wr() * SKINS.length) | 0] };
+    const look = woman ? woman.look : { shirt: SHIRTS[(wr() * SHIRTS.length) | 0], pants: [0x2c3e50, 0x333333, 0x5d4037, 0x1f3f8f][(wr() * 4) | 0], skin: SKINS[(wr() * SKINS.length) | 0] };
     const r = wr();
-    if (r < 0.2) { look.hat = 'fedora'; look.beard = HAIRS[(wr() * 3) | 0]; look.jacket = 0x1a1a1a; look.shirt = 0xffffff; }
+    if (woman) {}
+    else if (r < 0.2) { look.hat = 'fedora'; look.beard = HAIRS[(wr() * 3) | 0]; look.jacket = 0x1a1a1a; look.shirt = 0xffffff; }
     else if (r < 0.4) { look.kippah = [0x1b3a8a, 0xffffff, 0x222222][(wr() * 3) | 0]; look.hair = HAIRS[(wr() * HAIRS.length) | 0]; }
     else if (r < 0.55) look.cap = SHIRTS[(wr() * SHIRTS.length) | 0];
     else look.hair = HAIRS[(wr() * HAIRS.length) | 0];
@@ -498,9 +511,22 @@
       w.path = mkPath(cp.pts, false);
       w.s = wr() * w.path.len * 2;
     }
+    if (woman) {
+      w.rcKey = woman.key;
+      w.look = look;
+      rcWalkers.push(w);
+    }
     walkers.push(w);
   }
   for (let i = 0; i < (cityPaths ? 26 : 14); i++) spawnWalker();
+  // עוברות אורח בלבוש צנוע, לפי תמונות הייחוס (נטענות רק כשמתקרבים)
+  for (const woman of [
+    { key: 'w_hilonit', look: { shirt: 0x9fb8d6, pants: 0xb9ab97, skin: 0xe2b088, hair: 0x1c1410 } },
+    { key: 'w_haredit', look: { shirt: 0x28483a, pants: 0x28483a, skin: 0xf1c9a0, hair: 0x2a1c12 } },
+    { key: 'w_datia', look: { shirt: 0x1f2d52, pants: 0x6f7278, skin: 0xe8c0a0, tichel: 0x24345e } },
+    { key: 'w_hilonit', look: { shirt: 0x7a2f42, pants: 0x2b2d33, skin: 0xe2b088, hair: 0x2a1c12 } },
+    { key: 'maya', look: { shirt: 0x3f7f78, pants: 0x4b4e54, skin: 0xf1c9a0, hair: 0x4a2f1b } },
+  ]) spawnWalker(woman);
   let extraSpawned = false;
   function spawnExtraWalkers() {
     if (extraSpawned) return;
@@ -2389,7 +2415,7 @@
         n.p.group.position.y = n.sit ? 0.57 - n.rc.hipSit : 0;
         if (nearCam < 90) {
           n.p.group.updateMatrixWorld(true);
-          n.rc.update(animDt, { moving, spd: n.walkSpeed ? n.walkSpeed / 1.6 : 2.6, sit: !!n.sit, talk: !!(dlg && dlg.npc === n), t, bop: n.id === 'roi' && !S.flags.roiAttention, phoneUp: n.id === 'daniel' && !n.ctrl && m.targets.daniel !== 'accepted' && !(m.targets.daniel === 'later' && m.elapsed >= m.laterAt) });
+          n.rc.update(animDt, { moving, spd: n.id === 'ido' ? 4 : n.walkSpeed ? n.walkSpeed / 1.6 : 2.6, sit: !!n.sit, talk: !!(dlg && dlg.npc === n), t, bop: n.id === 'roi' && !S.flags.roiAttention, phoneUp: n.id === 'daniel' && !n.ctrl && m.targets.daniel !== 'accepted' && !(m.targets.daniel === 'later' && m.elapsed >= m.laterAt) });
         }
       }
       const k = iconFor(n);
@@ -2448,6 +2474,17 @@
         const bob = G.animatePerson(w.p, w.phase, moving ? 1 : 0);
         w.p.group.position.set(w.x, bob, w.z);
         w.p.group.rotation.y = w.rot;
+        if (w.rcKey) {
+          const nearCam = Math.hypot(w.x - (drv ? drv.x : player.x), w.z - (drv ? drv.z : player.z));
+          if (!w.rc && nearCam < 120) attachRealWalker(w);
+          if (w.rc && w.rc.group.visible) {
+            w.p.group.position.y = 0;
+            if (nearCam < 90) {
+              w.p.group.updateMatrixWorld(true);
+              w.rc.update(animDt, { moving, spd: w.speed, sit: false, talk: false, t: clock });
+            }
+          }
+        }
         if (w.iconT > 0) {
           w.iconT -= dt;
           if (w.iconT <= 0) w.icon.visible = false;
@@ -3230,7 +3267,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, get PS() { return PS; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, rcWalkers, get PS() { return PS; },
       player, van, npcById, keys, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 

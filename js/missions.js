@@ -64,7 +64,7 @@
       { id: 'alon', name: 'אלון', role: 'סטודנט, ״הבאר״', ...P.alon,
         look: { shirt: 0xf39c12, pants: 0x34495e, skin: 0xf0c8a0, hair: 0x6b4423 } },
       { id: 'maya', name: 'מאיה', role: 'סטודנטית, ״הבאר״', ...P.maya,
-        look: { shirt: 0xe84393, pants: 0x2d3436, skin: 0xf5d6b8, hair: 0x2b1b10 } },
+        look: { shirt: 0xc98fa0, pants: 0x4b4e54, skin: 0xf5d6b8, hair: 0x1c1410, scale: 1.02 } },
       { id: 'zalman', name: 'ר׳ זלמן', role: 'החזן מהבניין בקצה', ...P.zalman,
         look: { shirt: 0xffffff, jacket: 0x3a3a3a, pants: 0x2b2b2b, skin: 0xe6c2a6, hat: 'fedora', beard: 0xf0f0f0 } },
     ];

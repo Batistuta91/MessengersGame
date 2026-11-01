@@ -130,9 +130,32 @@
   }
 
   // כיפה סרוגה: כיפת כדור שטוחה על החלק האחורי-עליון של הראש, עם פס בהיר בשוליים
-  function addKippah(root, head, body, hair, color, plain) {
+  // מטפחת (טיכל): מכסה את כל השיער, קשורה מאחור בעורף, האוזניים והצוואר גלויים
+  function addTichel(root, head, body, hair, color) {
+    const { top, ring, cx, cz } = headRing(body, hair);
+    const R = (ring.max.x - ring.min.x) / 2 + 0.014, cloth = new T.MeshStandardMaterial({ color, roughness: 0.92, side: T.DoubleSide });
+    const g = new T.Group();
+    const shell = new T.Mesh(new T.SphereGeometry(R, 28, 16, 0, Math.PI * 2, 0, 1.85), cloth);
+    shell.scale.set(1, 1.02, 1.14);
+    shell.rotation.x = -0.62;
+    g.add(shell);
+    const knot = new T.Mesh(new T.SphereGeometry(0.026, 12, 8), cloth);
+    knot.position.set(0, -0.085, -R * 1.12);
+    g.add(knot);
+    for (const s of [-1, 1]) {
+      const tail = new T.Mesh(new T.BoxGeometry(0.035, 0.13, 0.006), cloth);
+      tail.position.set(s * 0.014, -0.15, -R * 1.14);
+      tail.rotation.z = s * 0.14;
+      g.add(tail);
+    }
+    g.traverse((o) => o.isMesh && (o.castShadow = true));
+    attachAt(head, g, new T.Vector3(cx, top - R + 0.012, cz - 0.012), root);
+  }
+
+  function addKippah(root, head, body, hair, color, plain, size) {
     const { top, cx, cz } = headRing(body, hair);
     const k = new T.Group();
+    if (size) k.scale.setScalar(size);
     const cap = new T.Mesh(new T.SphereGeometry(0.068, 20, 6, 0, Math.PI * 2, 0, 0.62), new T.MeshStandardMaterial({ color, roughness: 0.95 }));
     cap.scale.y = 0.55;
     k.add(cap);
@@ -303,6 +326,7 @@
       return p;
     }));
 
+  const HAIR = /short0|bob0|ponytail|long0/i;
   // בונה דמות מקובץ GLB: opts = { hat: 'chabad'|'homburg'|null, tzitzit, kippah: צבע, hair: צבע, beard: צבע }
   async function buildChar(buf, an, opts) {
     const mh = await parse(buf);
@@ -319,20 +343,26 @@
       if (!o.isMesh) return;
       o.castShadow = true;
       o.frustumCulled = false;
-      if (/short0/i.test(o.name)) hair = o;
+      if (HAIR.test(o.name)) hair = o;
       if (opts.noBeard && /beard|moustache/i.test(o.name)) o.visible = false;
       if (/body|base/i.test(o.name) && (!body || o.geometry.attributes.position.count > body.geometry.attributes.position.count)) body = o;
       (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
         if (m.map) m.map.encoding = T.LinearEncoding;
         // הייצוא סימן הכל כשקוף — רק שיער, זקן, גבות וריסים צריכים חיתוך שקיפות
-        const cut = /beard|moustache|eyebrow|eyelash|short0/i.test(m.name);
+        const cut = /beard|moustache|eyebrow|eyelash/i.test(m.name) || HAIR.test(m.name);
         m.transparent = false;
         m.depthWrite = true;
         m.alphaTest = cut ? (/beard|moustache/i.test(m.name) ? 0.22 : 0.5) : 0;
         m.side = cut ? T.DoubleSide : T.FrontSide;
         if (/beard|moustache/i.test(m.name)) m.color.set(opts.beard !== undefined ? opts.beard : 0x5a4030);
-        else if (/short0|eyebrow/i.test(m.name)) m.color.set(opts.hair !== undefined ? opts.hair : 0x5a4030);
-        if (/shoes/i.test(m.name)) m.color.set(0x222222);
+        else if (HAIR.test(m.name) || /eyebrow/i.test(m.name)) m.color.set(opts.hair !== undefined ? opts.hair : 0x5a4030);
+        if (/shoes/i.test(m.name)) {
+          m.color.set(opts.shoes !== undefined ? opts.shoes : 0x222222);
+          if (opts.shoes !== undefined) m.map = null; // נעל בהירה: הטקסטורה הכהה הייתה מכהה אותה
+        }
+        // בגדים בצבע אחיד: אפשר לצבוע מחדש לכל דמות
+        if (/_top$/.test(m.name) && opts.top !== undefined) m.color.set(opts.top);
+        if (/_bottom$/.test(m.name) && opts.bottom !== undefined) m.color.set(opts.bottom);
         // גוון עור מההגדרה המקורית (בהיר = בלי שינוי)
         if (opts.skin !== undefined && o === body) m.color.set(opts.skin);
         m.needsUpdate = true;
@@ -342,7 +372,8 @@
     const srcRoot = an.scene.clone();
     const retarget = makeRetarget(srcRoot, root, bones);
     if (opts.hat) addHat(root, head, body, hair, opts.hat);
-    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah, opts.kippahPlain);
+    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah, opts.kippahPlain, opts.kippahSize);
+    if (opts.tichel !== undefined) addTichel(root, head, body, hair, opts.tichel);
     if (opts.glasses) addGlasses(root, head, body, hair);
     let cloth = null;
     root.traverse((o) => { if (o.isSkinnedMesh && /suit/i.test(o.name)) cloth = o; });
