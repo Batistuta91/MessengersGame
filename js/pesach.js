@@ -248,7 +248,7 @@
         title: 'סדר פסח לכל השכונה!',
         note: '״כל דכפין ייתי ויכול״ — כל מי שרעב, יבוא ויאכל. השנה, השולחן של בית חב״ד היה ארוך מספיק לכולם.',
         rows: [['מצות בסבב הטוב', String(st.best)], ['קיבלו מצה שמורה', st.recips.length + ' אנשים']],
-        changes: ['✓ פרק 2 הושלם!', 'כל מי שקיבל מצה ישב בסדר המשותף', 'בהוד השרון: בית חב״ד יכול להפוך ל״מרכז השליחות הגדול״ (770)', 'המאפייה פתוחה תמיד — נסו לשבור את השיא'],
+        changes: ['✓ פרק 2 הושלם!', 'כל מי שקיבל מצה ישב בסדר המשותף', 'בהוד השרון: בית חב״ד יכול להפוך ל״מרכז השליחות הגדול״ (770)'],
         onClose: () => {
           seder.visible = false;
           player.sit = false;
@@ -301,7 +301,8 @@
         if (canOffer() && (q().status === 'locked' || q().status === 'idle')) return OFFER();
         return null;
       },
-      bakeryOpen: () => canOffer() || active() || (PT && q().status === 'complete'),
+      // אחרי שהחלוקה הושלמה אין יותר צורך במאפייה
+      bakeryOpen: () => (canOffer() || active()) && q().status !== 'complete' && !['seder', 'sedertime', 'done'].includes(q().step),
       mosheIcon: () => (active() ? (q().step === 'sedertime' ? false : 'hint') : canOffer() && q().status !== 'complete' ? 'mission' : null),
       npcDialog,
       iconFor: (n) => (active() && q().step === 'deliver' && q().recips.includes(n.id) && !q().delivered[n.id] ? 'alert' : null),

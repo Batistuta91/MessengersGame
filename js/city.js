@@ -356,6 +356,7 @@
         tex.minFilter = T.LinearMipmapLinearFilter;
         tex.generateMipmaps = true;
         tex.anisotropy = 4;
+        tex.dispose(); // אם הטקסטורה כבר עלתה לכרטיס בגודל הישן — מקצים מחדש
         tex.needsUpdate = true;
       };
       img.src = src;
@@ -615,6 +616,148 @@
     const wallOff = new T.MeshLambertMaterial({ map: offTex, emissive: 0xffffff, emissiveMap: offEmi, emissiveIntensity: 0, vertexColors: true });
     const roofMat = new T.MeshLambertMaterial({ map: roofTex, vertexColors: true });
     const gableMat = new T.MeshLambertMaterial({ map: tileTex, vertexColors: true });
+    // חזית אבן: אותם חלונות ואותם אורות לילה כמו הטיח
+    const stoneTex = G.canvasTex(4, 4, (g) => { g.fillStyle = '#e6d9c0'; g.fillRect(0, 0, 4, 4); }, true);
+    const wallStone = new T.MeshLambertMaterial({ map: stoneTex, emissive: 0xffffff, emissiveMap: resEmi, emissiveIntensity: 0, vertexColors: true });
+    const STONE_TINT = new T.Color(1, 0.98, 0.94);
+
+    // ---------- חזיתות וגגות בצילום (ambientCG, CC0) ----------
+    // אותה פריסה בדיוק כמו הטקסטורות למעלה (יחידות של 64): החלונות יושבים על אורות הלילה.
+    // מחולל אקראיות משלהן — rnd קובע את פריסת העיר ואסור לשנות את הרצף שלו.
+    const FS = navigator.maxTouchPoints > 0 ? 512 : 1024;
+    function drawWindows(g, S) {
+      const r = G.rng(7741);
+      g.save();
+      g.scale(S / 64, S / 64);
+      const slats = (x, y, w, h) => {
+        g.fillStyle = '#b6babc';
+        g.fillRect(x, y, w, h);
+        g.fillStyle = 'rgba(70,75,80,.45)';
+        for (let k = y + 0.45; k < y + h; k += 0.55) g.fillRect(x, k, w, 0.14);
+      };
+      resLit.forEach((kind, i) => {
+        const ox = (i % 4) * 16, oy = ((i / 4) | 0) * 16;
+        // פס קומה וכתמי גשם מתחת לאדן
+        g.fillStyle = 'rgba(80,70,60,.22)';
+        g.fillRect(ox, oy + 15.5, 16, 0.3);
+        const st = g.createLinearGradient(0, oy + 12.5, 0, oy + 15.5);
+        st.addColorStop(0, 'rgba(60,50,40,.2)');
+        st.addColorStop(1, 'rgba(60,50,40,0)');
+        g.fillStyle = st;
+        g.fillRect(ox + 3.2, oy + 12.5, 9.6, 3);
+        // מסגרת אלומיניום וארגז תריס
+        g.fillStyle = '#d6d3cc';
+        g.fillRect(ox + 3.4, oy + 3.4, 9.2, 9.2);
+        g.fillStyle = '#c4c1ba';
+        g.fillRect(ox + 3.4, oy + 2.5, 9.2, 1.2);
+        g.fillStyle = 'rgba(0,0,0,.25)';
+        g.fillRect(ox + 3.4, oy + 3.7, 9.2, 0.2);
+        // זכוכית שמשקפת שמיים
+        const gl = g.createLinearGradient(ox + 4, oy + 4, ox + 12, oy + 12);
+        gl.addColorStop(0, '#9dbdd8');
+        gl.addColorStop(0.45, '#4d6a88');
+        gl.addColorStop(1, '#22303f');
+        g.fillStyle = gl;
+        g.fillRect(ox + 4, oy + 4, 8, 8);
+        g.fillStyle = 'rgba(255,255,255,.1)';
+        g.beginPath();
+        g.moveTo(ox + 5, oy + 12);
+        g.lineTo(ox + 8, oy + 4);
+        g.lineTo(ox + 9.6, oy + 4);
+        g.lineTo(ox + 6.6, oy + 12);
+        g.fill();
+        if (kind < 0.45) slats(ox + 4, oy + 4, 8, 2 + r() * 4.5);
+        else if (kind < 0.7) {
+          const c = ['#efe6d0', '#d9c7a8', '#c9d6e0', '#e6d5dc'][(r() * 4) | 0];
+          g.fillStyle = c;
+          g.fillRect(ox + 4, oy + 4, 2.2, 8);
+          g.fillRect(ox + 9.8, oy + 4, 2.2, 8);
+          g.fillStyle = 'rgba(0,0,0,.14)';
+          for (let k = 0; k < 3; k++) {
+            g.fillRect(ox + 4.5 + k * 0.6, oy + 4, 0.15, 8);
+            g.fillRect(ox + 10.2 + k * 0.6, oy + 4, 0.15, 8);
+          }
+        } else if (kind < 0.82) slats(ox + 4, oy + 4, 8, 8);
+        // מחיצה וזיגוג כפול
+        g.fillStyle = '#d6d3cc';
+        g.fillRect(ox + 7.85, oy + 4, 0.3, 8);
+        // אדן
+        g.fillStyle = '#e4e0d8';
+        g.fillRect(ox + 2.8, oy + 12.2, 10.4, 0.5);
+        g.fillStyle = 'rgba(0,0,0,.3)';
+        g.fillRect(ox + 2.8, oy + 12.7, 10.4, 0.2);
+        if (r() < 0.22) {
+          // מעקה מתכת בחלון
+          g.fillStyle = '#2b2d30';
+          g.fillRect(ox + 3, oy + 9, 10, 0.3);
+          g.fillRect(ox + 3, oy + 11.6, 10, 0.2);
+          for (let x = ox + 3; x <= ox + 13; x += 1) g.fillRect(x, oy + 9, 0.14, 2.8);
+        }
+        if (r() < 0.3) {
+          // מזגן עם צינור ניקוז
+          const ax = ox + (r() < 0.5 ? 9 : 2);
+          g.fillStyle = 'rgba(0,0,0,.25)';
+          g.fillRect(ax + 0.2, oy + 15.2, 5, 0.3);
+          g.fillStyle = '#e8e7e2';
+          g.fillRect(ax, oy + 13, 5, 2.2);
+          g.fillStyle = '#8c8c88';
+          for (let y = oy + 13.3; y < oy + 15; y += 0.4) g.fillRect(ax + 0.4, y, 2.6, 0.16);
+          g.fillStyle = '#6f6f6b';
+          g.beginPath();
+          g.arc(ax + 3.9, oy + 14.1, 0.65, 0, 7);
+          g.fill();
+        }
+      });
+      g.restore();
+    }
+    photoTex(resTex, 'plaster', FS, 4, null, drawWindows);
+    photoTex(stoneTex, 'stone', FS, 4, 'rgb(250,240,222)', drawWindows);
+    photoTex(offTex, 'plaster', FS >> 1, 2, 'rgb(208,211,216)', (g, S) => {
+      const r = G.rng(3319);
+      g.save();
+      g.scale(S / 64, S / 64);
+      for (let cy = 0; cy < 4; cy++) {
+        const y = cy * 16 + 3;
+        for (let cx = 0; cx < 8; cx++) {
+          const gl = g.createLinearGradient(0, y, 0, y + 10), b = r() * 0.14;
+          gl.addColorStop(0, 'rgb(' + [150 + b * 200, 186 + b * 200, 214 + b * 200].map((v) => v | 0).join(',') + ')');
+          gl.addColorStop(1, '#2f4a66');
+          g.fillStyle = gl;
+          g.fillRect(cx * 8, y, 8, 10);
+        }
+        g.fillStyle = '#c6cacd';
+        for (let cx = 0; cx < 8; cx++) g.fillRect(cx * 8 + 7.4, y, 0.6, 10);
+        g.fillStyle = 'rgba(0,0,0,.28)';
+        g.fillRect(0, y, 64, 0.35);
+      }
+      g.restore();
+    });
+    // גג שטוח: בטון עם תפרי זפת
+    photoTex(roofTex, 'roof', 256, 1, null, (g, S) => {
+      g.fillStyle = 'rgba(40,38,36,.35)';
+      g.fillRect(0, 0, S, 2);
+      g.fillRect(0, 0, 2, S);
+      g.fillRect(S * 0.5, 0, 1, S);
+    });
+    // רעפי חרס: שורות מדורגות, כל רעף בגוון קצת אחר. הפינה הלבנה משמשת את קירות הגמלון
+    photoTex(tileTex, 'roof', 512, 1, 'rgb(205,110,74)', (g, S) => {
+      const r = G.rng(911), rows = 8, cols = 10, tw = S / cols, th = S / rows;
+      for (let y = 0; y < rows; y++)
+        for (let x = -1; x < cols; x++) {
+          const px = x * tw + (y % 2 ? tw / 2 : 0), py = y * th, sh = r();
+          const gr = g.createLinearGradient(0, py, 0, py + th);
+          gr.addColorStop(0, 'rgba(70,22,10,.5)');
+          gr.addColorStop(0.3, 'rgba(255,170,120,' + (0.06 + sh * 0.16) + ')');
+          gr.addColorStop(1, 'rgba(60,18,8,' + (0.1 + sh * 0.22) + ')');
+          g.fillStyle = gr;
+          g.fillRect(px, py, tw, th);
+          g.fillStyle = 'rgba(50,14,6,.5)';
+          g.fillRect(px, py, 1.5, th);
+          g.fillRect(px, py + th - 2, tw, 2);
+        }
+      g.fillStyle = '#fff';
+      g.fillRect((S * 30) / 32, 0, S / 16, S / 16);
+    });
     const PLASTER = ['#f4efe6', '#ece4d4', '#e7ddcc', '#f5f2ec', '#dfd8ca', '#ebdec6', '#dccfb8', '#f0e3cb', '#e6e6df', '#dbcaa9', '#d0dadd', '#ead2b6'];
     const HOUSE_K = new Set(['house', 'detached', 'semidetached_house', 'bungalow', 'terrace']);
 
@@ -712,10 +855,11 @@
         const dx = bx - ax, dz = bz - az;
         const flip = Math.abs(nx - -dz / L) > 1e-6 || Math.abs(nz - dx / L) > 1e-6;
         const ys = y0 === 0 && y1 > 4.6 ? [0, 4.5, y1] : [y0, y1];
+        const tint = b.stone ? STONE_TINT : b.tint;
         for (let r = 0; r < ys.length - 1; r++) {
           const ya = ys[r], yb = ys[r + 1];
           const ao = (y) => (y0 > 0 || y >= 4.5 ? 1 : 0.6 + 0.4 * Math.pow(G.clamp(y / 4.5, 0, 1), 0.7));
-          const ca = tmpC.copy(b.tint).multiplyScalar(ao(ya)).clone(), cb = tmpC.copy(b.tint).multiplyScalar(ao(yb)).clone();
+          const ca = tmpC.copy(tint).multiplyScalar(ao(ya)).clone(), cb = tmpC.copy(tint).multiplyScalar(ao(yb)).clone();
           const u0 = acc / 16, u1 = (acc + L) / 16, va = ya / 12.8, vb = yb / 12.8;
           const V = [
             [ax, ya, az, u0, va, ca], [bx, ya, bz, u1, va, ca], [bx, yb, bz, u1, vb, cb], [ax, yb, az, u0, vb, cb],
@@ -739,6 +883,22 @@
         let A = contour[i0], Bv = contour[i1], C = contour[i2];
         if ((Bv.y - A.y) * (C.x - A.x) - (Bv.x - A.x) * (C.y - A.y) < 0) [Bv, C] = [C, Bv];
         for (const v of [A, Bv, C]) pushV(buf, v.x, y, v.y, 0, 1, 0, v.x / 8, v.y / 8, col);
+      }
+    }
+    // מעקה בטון נמוך סביב גג שטוח: צד חיצוני, צד פנימי וראש
+    function parapetFor(buf, b, y, h) {
+      const T0 = 0.18, top = y + h, c = tmpC.copy(b.stone ? STONE_TINT : b.tint).multiplyScalar(0.95).clone();
+      for (const e of b.edges) {
+        const { ax, az, bx, bz, L, nx, nz } = e;
+        const dx = bx - ax, dz = bz - az;
+        const flip = Math.abs(nx - -dz / L) > 1e-6 || Math.abs(nz - dx / L) > 1e-6;
+        const ix = -nx * T0, iz = -nz * T0, u = L / 8;
+        const quad = (V, n, rev) => {
+          for (const k of rev ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3]) pushV(buf, V[k][0], V[k][1], V[k][2], n[0], n[1], n[2], V[k][3], V[k][4], c);
+        };
+        quad([[ax, y, az, 0, 0], [bx, y, bz, u, 0], [bx, top, bz, u, 0.09], [ax, top, az, 0, 0.09]], [nx, 0, nz], flip);
+        quad([[ax + ix, y, az + iz, 0, 0], [bx + ix, y, bz + iz, u, 0], [bx + ix, top, bz + iz, u, 0.09], [ax + ix, top, az + iz, 0, 0.09]], [-nx, 0, -nz], !flip);
+        quad([[ax, top, az, 0, 0], [bx, top, bz, u, 0], [bx + ix, top, bz + iz, u, 0.03], [ax + ix, top, az + iz, 0, 0.03]], [0, 1, 0], !flip);
       }
     }
     // האם אפשר גג רעפים (מלבן בערך)
@@ -789,6 +949,8 @@
       b.edges = edgesOf(b);
       const isHouse = HOUSE_K.has(b.kind) || (b.kind === 'yes' && b.area > 70 && b.area < 260 && b.levels <= 2);
       b.gable = isHouse && rnd() < 0.55 && !!canGable(b);
+      // חיפוי אבן: נפוץ יותר בבנייני מגורים גבוהים (לפי מספר הבניין, בלי לגעת ב-rnd)
+      b.stone = !b.office && ((b.idx * 2654435761) >>> 0) % 100 < (b.levels >= 3 ? 45 : 18);
       tileAt(b.cx, b.cz).B.push(b);
     }
     const solarGeo = G.mergeParts([
@@ -820,14 +982,15 @@
     }
     // בניינים של אריח: קירות, גגות, רעפים ודודי שמש
     function buildTileBuildings(t, r) {
-      const bufs = { res: { p: [], n: [], u: [], c: [] }, off: { p: [], n: [], u: [], c: [] }, roof: { p: [], n: [], u: [], c: [] }, gab: { p: [], n: [], u: [], c: [] } };
+      const bufs = { res: { p: [], n: [], u: [], c: [] }, sto: { p: [], n: [], u: [], c: [] }, off: { p: [], n: [], u: [], c: [] }, roof: { p: [], n: [], u: [], c: [] }, gab: { p: [], n: [], u: [], c: [] } };
       const solar = [];
       for (const b of t.B) {
-        wallsFor(b.office ? bufs.off : bufs.res, b, 0, b.h, r() * 64);
+        wallsFor(b.office ? bufs.off : b.stone ? bufs.sto : bufs.res, b, 0, b.h, r() * 64);
         if (b.gable) gableFor(bufs.gab, b);
         else {
           const g = 0.72 + r() * 0.14;
           roofFor(bufs.roof, b, b.h, new T.Color(g, g * 0.98, g * 0.95));
+          if (b.area >= 30 && !b.noParapet) parapetFor(bufs.roof, b, b.h, 0.7);
           // דוד שמש על הגג — סמל של כל עיר בישראל
           if (!b.office && b.area > 50 && b.area < 1200 && b.kind !== 'garage' && b.kind !== 'roof') {
             const cnt = b.area < 250 ? 1 : b.area < 600 ? 2 : 3;
@@ -838,7 +1001,7 @@
           }
         }
       }
-      for (const [key, mat, cast] of [['res', wallRes, true], ['off', wallOff, true], ['roof', roofMat, false], ['gab', gableMat, true]]) {
+      for (const [key, mat, cast] of [['res', wallRes, true], ['sto', wallStone, true], ['off', wallOff, true], ['roof', roofMat, false], ['gab', gableMat, true]]) {
         const bf = bufs[key];
         if (!bf.p.length) continue;
         const m = meshOf(bf, mat);
@@ -1486,6 +1649,9 @@
       return chB;
     }
     const chB = W.cityId === 'pt' ? storyPT() : storyHod();
+    // בית חב״ד נשאר בטיח ובלי מעקה: בשדרוגים נוספת עליו קומה
+    chB.stone = false;
+    chB.noParapet = true;
 
     // ================= עצים, דקלים, פנסים, רכבים חונים =================
     // המיקומים (וההתנגשויות) נקבעים לכל העיר; הרשתות נבנות לפי אריח
@@ -2022,7 +2188,7 @@
     scene.add(clouds);
     const dayBulb = new T.Color(0xc9c9c9), nightBulb = new T.Color(0xfff0b0);
     W.setNight = function (n) {
-      wallRes.emissiveIntensity = wallOff.emissiveIntensity = n * 0.9;
+      wallRes.emissiveIntensity = wallStone.emissiveIntensity = wallOff.emissiveIntensity = n * 0.9;
       for (const s of shopFronts) s.emissiveIntensity = n * 0.8;
       bulbMat.color.copy(dayBulb).lerp(nightBulb, n);
       glowMat.opacity = n * 0.85;

@@ -30,7 +30,7 @@
     root.className = 'overlay hidden';
     root.innerHTML =
       '<div class="mz-card">' +
-      '<div class="mz-head"><b>🫓 מאפיית מצות שמורות</b><span id="mz-clock">⏱ 0:00 / 18:00</span><span id="mz-count">מצות: 0</span></div>' +
+      '<div class="mz-head"><b>🫓 מאפיית מצות שמורות</b><span id="mz-clock">⏱ 0:00 / 18:00</span><span id="mz-count">מצות: 0</span><button id="mz-exit" class="btn ghost" tabindex="-1">✕ יציאה</button></div>' +
       '<canvas id="mz-canvas" width="1280" height="600"></canvas>' +
       '<div id="mz-tip" class="mz-tip"></div>' +
       '<div id="mz-btns" class="mz-btns"></div>' +
@@ -63,6 +63,12 @@
       st = null;
       show(root, false);
       api.onClose && api.onClose();
+    }
+    // יציאה בכל רגע: אם נכנסו בטעות (עוד אין מצות) — ישר לעיר, אחרת מסך סיכום
+    function leave() {
+      if (!st) return;
+      if (st.done || !st.made) close();
+      else finish(true);
     }
     function show(el, on) {
       el.classList.toggle('hidden', !on);
@@ -166,8 +172,7 @@
       if (!st || root.classList.contains('hidden')) return;
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (st.done) close();
-        else finish(true);
+        leave();
         return;
       }
       if (st.done) {
@@ -181,6 +186,7 @@
       if (!e.repeat) press(e.code);
     }
     window.addEventListener('keydown', onKey, true);
+    $('mz-exit').addEventListener('click', leave);
 
     function finish(quit) {
       st.done = true;
@@ -217,7 +223,7 @@
     // ---------- ציור ----------
     function loop(now) {
       if (!st) return;
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = G.clamp((now - last) / 1000, 0, 0.05);
       last = now;
       update(dt);
       raf = requestAnimationFrame(loop);
@@ -692,7 +698,7 @@
       zone: () => (st ? zoneOf() : null),
       tick: (dt) => update(dt),
       interactable(player) {
-        // המאפייה קיימת רק בפתח תקווה, ורק מרגע שמגיע זמן משימת המצות (אחרי הסיבוב עם ברסלב)
+        // המאפייה קיימת רק בפתח תקווה, מרגע שמגיע זמן משימת המצות (אחרי הסיבוב עם ברסלב) ועד סוף החלוקה
         const open = !api.isOpen || api.isOpen();
         if (sign) sign.visible = open;
         if (!open || Math.hypot(player.x - spot.x, player.z - spot.z) > 1.9) return null;
