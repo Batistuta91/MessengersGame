@@ -130,17 +130,54 @@
   }
 
   // כיפה סרוגה: כיפת כדור שטוחה על החלק האחורי-עליון של הראש, עם פס בהיר בשוליים
-  function addKippah(root, head, body, hair, color) {
+  function addKippah(root, head, body, hair, color, plain) {
     const { top, cx, cz } = headRing(body, hair);
     const k = new T.Group();
     const cap = new T.Mesh(new T.SphereGeometry(0.068, 20, 6, 0, Math.PI * 2, 0, 0.62), new T.MeshStandardMaterial({ color, roughness: 0.95 }));
     cap.scale.y = 0.55;
-    const rim = new T.Mesh(new T.TorusGeometry(0.039, 0.0045, 4, 24), new T.MeshStandardMaterial({ color: 0xf0ece0, roughness: 0.95 }));
-    rim.rotation.x = Math.PI / 2;
-    rim.position.y = 0.022;
-    k.add(cap, rim);
+    k.add(cap);
+    if (!plain) {
+      const rim = new T.Mesh(new T.TorusGeometry(0.039, 0.0045, 4, 24), new T.MeshStandardMaterial({ color: 0xf0ece0, roughness: 0.95 }));
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 0.022;
+      k.add(rim);
+    }
     k.rotation.x = -0.35;
     attachAt(head, k, new T.Vector3(cx, top - 0.032, cz - 0.035), root);
+  }
+
+  // משקפיים: מסגרת מתכת דקה, לפי מיקום הפנים הנמדד בגובה העיניים
+  function addGlasses(root, head, body, hair) {
+    const { top, cx } = headRing(body, hair);
+    const eyeY = top - 0.125;
+    const pts = skinnedPoints(body, body.geometry.boundingBox.max.y - 0.17);
+    let front = -1e9, wide = 0;
+    for (const p of pts) {
+      if (Math.abs(p.y - eyeY) > 0.012) continue;
+      const dx = Math.abs(p.x - cx);
+      if (dx > 0.022 && dx < 0.045 && p.z > front) front = p.z;
+      if (dx > wide) wide = dx;
+    }
+    const metal = new T.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.35, metalness: 0.6 });
+    const g = new T.Group(), R = 0.021, X = 0.032, TH = 0.0022;
+    for (const s of [-1, 1]) {
+      const lens = new T.Mesh(new T.TorusGeometry(R, TH, 6, 24), metal);
+      lens.position.x = s * X;
+      lens.scale.y = 0.82;
+      g.add(lens);
+      // זרוע עד האוזן
+      const armL = 0.09;
+      const arm = new T.Mesh(new T.BoxGeometry(TH * 1.4, TH * 1.4, armL), metal);
+      arm.position.set(s * (wide + 0.002), 0.004, -armL / 2);
+      g.add(arm);
+      const hinge = new T.Mesh(new T.BoxGeometry(Math.max(0.004, wide - X - R + 0.002), TH * 1.4, TH * 1.4), metal);
+      hinge.position.set(s * ((wide + X + R) / 2), 0.004, 0);
+      g.add(hinge);
+    }
+    const bridge = new T.Mesh(new T.BoxGeometry(2 * (X - R), TH * 1.4, TH * 1.4), metal);
+    bridge.position.y = 0.005;
+    g.add(bridge);
+    attachAt(head, g, new T.Vector3(cx, eyeY, front + 0.004), root);
   }
 
   // ציציות: שתי פינות בכל צד, 8 חוטים לכל פינה, מתחת לשולי הז׳קט.
@@ -305,10 +342,13 @@
     const srcRoot = an.scene.clone();
     const retarget = makeRetarget(srcRoot, root, bones);
     if (opts.hat) addHat(root, head, body, hair, opts.hat);
-    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah);
+    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah, opts.kippahPlain);
+    if (opts.glasses) addGlasses(root, head, body, hair);
     let cloth = null;
     root.traverse((o) => { if (o.isSkinnedMesh && /suit/i.test(o.name)) cloth = o; });
     if (opts.tzitzit) addTzitzit(root, pelvis, body, cloth);
+    // גוון לחליפה כהה: כפל צבע לא משפיע על טקסטורה שחורה, לכן מוסיפים אור עצמי עדין
+    if (opts.suitGlow !== undefined && cloth) cloth.material.emissive = new T.Color(opts.suitGlow);
     const bb0 = new T.Box3().setFromObject(body), H0 = bb0.max.y - bb0.min.y;
     // בדגם הוסרה העניבה ונשאר פתח בחזה: הצד הפנימי של הבגד נצבע לבן, וכך רואים דרך הפתח חולצה
     if (opts.shirtFront && cloth) {

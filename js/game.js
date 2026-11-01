@@ -396,7 +396,7 @@
     pt_shimshon: 'dati', pt_avi: 'striped', pt_moti: 'secular1', pt_rachamim: 'dati', pt_father: 'secular2', pt_yoel: 'moshe',
   };
   function realOpts(L) {
-    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
+    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
     if (L.hat) Object.assign(o, { hat: 'homburg', tzitzit: true, hair: L.hair !== undefined ? L.hair : 0x3a2a1a });
     // עור: יחס לגוון הבהיר של הדגם, כדי שגם דמות כהה תישאר כהה
     if (L.skin !== undefined) {
@@ -409,7 +409,7 @@
   // נטען רק כשמתקרבים, דמות אחת בכל פעם: בלי תקיעה בטעינה ובלי זיכרון מיותר בטלפון
   function attachRealNPC(n) {
     if (S.settings.realChar === false || !G.loadNPCChar || n.rc || n.rcLoading || rcBusy) return;
-    const key = n.id === 'moshe' && CITY === 'pt' ? 'haredi' : REAL_NPC[n.id];
+    const key = REAL_NPC[n.id];
     if (!key) return;
     n.rcLoading = rcBusy = true;
     const opts = realOpts(n.def.look);
@@ -434,7 +434,8 @@
     return n;
   }
   // בפתח תקווה: במקום משה — ר׳ מנחם, השליח של העיר; דמויות פרק 1 נשארות בהוד השרון
-  if (CITY === 'pt') Object.assign(NPC_DEFS[0], { name: 'ר׳ מנחם', role: 'השליח של פתח תקווה', look: { shirt: 0xffffff, jacket: 0x1a1a1a, pants: 0x1a1a1a, skin: 0xe2b088, hat: 'fedora', beard: 0x6b4a2b } });
+  // מראה שונה לגמרי מהשליח (הדמות הראשית): מבוגר ומלא, זקן מלח ופלפל, כיפה שחורה ומשקפיים, חליפה כחולה כהה
+  if (CITY === 'pt') Object.assign(NPC_DEFS[0], { name: 'ר׳ מנחם', role: 'השליח של פתח תקווה', look: { shirt: 0xffffff, jacket: 0x1f2f55, pants: 0x1f2f55, skin: 0xe2b088, kippah: 0x0d0d0d, kippahPlain: true, hair: 0x8a8782, beard: 0x9a9792, glasses: true, tzitzit: true, suitGlow: 0x060b1a, scale: 1.0 } });
   for (const d of NPC_DEFS) {
     const sp = SPOT[d.id];
     if (sp) Object.assign(d, { x: sp.x, z: sp.z, rot: sp.rot || 0 });
