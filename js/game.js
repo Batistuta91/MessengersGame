@@ -170,10 +170,43 @@
   window.addEventListener('resize', resize);
 
   // ---------- שמיים ושמש (נראים במצלמת גוף שלישי) ----------
+  // עננים: טקסטורת רעש אחת שנדגמת פעמיים בהטלה על כיפת השמיים (זול גם בטלפון)
+  const skyNoise = G.canvasTex(256, 256, (g) => {
+    const r = G.rng(4242);
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, 256, 256);
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 150; i++) {
+      const cx = r() * 256, cy = r() * 256, rad = 12 + r() * r() * 58, a = 0.12 + r() * 0.2;
+      for (const ox of [-256, 0, 256])
+        for (const oy of [-256, 0, 256]) {
+          const gr = g.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, rad);
+          gr.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+          gr.addColorStop(1, 'rgba(255,255,255,0)');
+          g.fillStyle = gr;
+          g.fillRect(cx + ox - rad, cy + oy - rad, rad * 2, rad * 2);
+        }
+    }
+    g.globalCompositeOperation = 'source-over';
+  }, true, true);
   const skyMat = new T.ShaderMaterial({
-    uniforms: { top: { value: new T.Color(0x5fa8e0) }, horizon: { value: new T.Color(0xd8ecf8) } },
-    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vP; void main(){ float h = max(vP.y, 0.0); gl_FragColor = vec4(mix(horizon, top, pow(h, 0.55)), 1.0); }',
+    uniforms: {
+      top: { value: new T.Color(0x5fa8e0) }, horizon: { value: new T.Color(0xd8ecf8) }, noise: { value: skyNoise },
+      sunV: { value: new T.Vector3(0, 1, 0) }, sunC: { value: new T.Color(0xffffff) }, cloudA: { value: new T.Color(0xffffff) }, cloudB: { value: new T.Color(0xb9c6d4) },
+      time: { value: 0 }, cover: { value: 0.5 }, stars: { value: 0 },
+    },
+    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader:
+      'uniform vec3 top, horizon, sunV, sunC, cloudA, cloudB; uniform sampler2D noise; uniform float time, cover, stars; varying vec3 vP;' +
+      'void main(){ vec3 d = normalize(vP); float h = max(d.y, 0.0); vec3 c = mix(horizon, top, pow(h, 0.55));' +
+      ' float s = max(dot(d, sunV), 0.0); c += sunC * pow(s, 10.0) * 0.3;' +
+      ' if (stars > 0.01 && d.y > 0.0) { vec3 q = floor(d * 460.0); float n = fract(sin(dot(q, vec3(12.99, 78.23, 37.72))) * 43758.5); c += vec3(0.75) * step(0.9975, n) * stars * smoothstep(0.03, 0.3, d.y); }' +
+      ' if (d.y > 0.0) { vec2 p = d.xz / (d.y + 0.14);' +
+      '  float n = texture2D(noise, p * 0.11 + vec2(time * 0.0016, time * 0.0007)).r * 0.65 + texture2D(noise, p * 0.31 - vec2(time * 0.0023, 0.0)).r * 0.35;' +
+      '  float m = smoothstep(cover, cover + 0.2, n) * smoothstep(0.015, 0.14, d.y);' +
+      '  vec3 cc = mix(cloudB, cloudA, smoothstep(cover + 0.02, cover + 0.3, n)) + sunC * pow(s, 4.0) * 0.22;' +
+      '  c = mix(c, cc, m * 0.92); }' +
+      ' gl_FragColor = vec4(c, 1.0); }',
     side: T.BackSide, depthWrite: false, fog: false,
   });
   const sky = new T.Mesh(new T.SphereGeometry(380, 24, 12), skyMat);
@@ -521,27 +554,6 @@
   ring.rotation.x = -Math.PI / 2;
   ring.visible = false;
   scene.add(ring);
-
-  const noteMat = new T.SpriteMaterial({
-    map: G.canvasTex(16, 16, (g) => {
-      g.fillStyle = '#ffd23f';
-      g.font = 'bold 15px Arial';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText('♪', 8, 9);
-    }),
-    transparent: true, depthTest: false,
-  });
-  const notes = [];
-  for (let i = 0; i < 8; i++) {
-    const s = new T.Sprite(noteMat.clone());
-    s.scale.set(0.8, 0.8, 1);
-    s.visible = false;
-    s.renderOrder = 15;
-    scene.add(s);
-    notes.push({ s, life: 0, vx: 0 });
-  }
-  let noteT = 0;
 
   // ================= ממשק =================
   const ui = {
@@ -2872,20 +2884,6 @@
     A.setRadioVolume(vol * duck);
     A.setDuck(duck);
     A.setEngine(!!drv && drv.type !== 'bike', drv ? Math.abs(drv.v) / drv.P.max : 0, drv ? drv.P.pitch : 1);
-    if (S.radio && vol > 0.05 && (S.radio !== A.KOL || drv === van)) {
-      const src = drv || van;
-      noteT -= dt;
-      if (noteT <= 0) {
-        noteT = 0.55;
-        const nt = notes.find((x) => x.life <= 0);
-        if (nt) {
-          nt.life = 1.6;
-          nt.vx = (Math.random() - 0.5) * 1.2;
-          nt.s.position.set(src.x, 3.4, src.z);
-          nt.s.visible = true;
-        }
-      }
-    }
     saveT += dt;
     if (saveT > 5) {
       saveT = 0;
@@ -2905,8 +2903,9 @@
     [5, 0x0f1b3d, 0.42, 0.18, 0x8899ff, 1],
     [6.5, 0xf4a261, 0.5, 0.5, 0xffb37a, 0.45],
     [8, 0x8ecae6, 0.65, 0.85, 0xfff4e0, 0],
-    [16.5, 0x8ecae6, 0.65, 0.85, 0xfff4e0, 0],
-    [18.5, 0xff8c42, 0.5, 0.55, 0xff9a5a, 0.45],
+    [16, 0x8ecae6, 0.65, 0.85, 0xfff4e0, 0],
+    [17.3, 0xb4cfd8, 0.6, 0.9, 0xffdca8, 0],
+    [18.5, 0xff8c42, 0.5, 0.6, 0xff9050, 0.45],
     [20, 0x16224a, 0.56, 0.22, 0x7f8fff, 1],
     [24, 0x0b1430, 0.54, 0.22, 0x8899ff, 1],
   ].map((e) => ({ h: e[0], sky: new T.Color(e[1]), hemi: e[2], sun: e[3], sunCol: new T.Color(e[4]), night: e[5] }));
@@ -2982,20 +2981,31 @@
     W.fz = player.z;
     W.update(clock);
     updateNightLights(Math.max(0, lastNight));
-    const ang = G.clamp((h - 6) / 12, 0, 1) * Math.PI;
-    if (h > 6 && h < 18) sunDir.set(Math.cos(ang) * 0.9, 0.55 + 0.45 * Math.sin(ang), 0.55).normalize();
-    else sunDir.set(0.4, 1, 0.6).normalize();
+    // השמש נעה בקשת ויורדת נמוך בערב (צללים ארוכים), ועוברת בהדרגה לאור ירח כשהיא כבר חלשה
+    const ang = G.clamp((h - 5.6) / 13.3, 0, 1) * Math.PI;
+    sunDir.set(Math.cos(ang) * 0.9, 0.16 + 0.84 * Math.sin(ang), 0.5).normalize();
+    const moon = Math.max(G.clamp((h - 18.9) / 0.8, 0, 1), G.clamp((5.6 - h) / 0.6, 0, 1));
+    if (moon > 0) sunDir.lerp(moonDir, moon).normalize();
     sun.position.copy(camTarget).addScaledVector(sunDir, 90);
     sun.target.position.copy(camTarget);
     // שמיים בגוף שלישי: כחול למעלה, אופק בהיר וערפל באותו צבע
     if (camera === camP) {
-      skyMat.uniforms.top.value.copy(scene.background).multiplyScalar(0.85);
+      const U = skyMat.uniforms;
+      // בשקיעה: אופק כתום ולמעלה סגול-כחול, והעננים נצבעים מלמטה
+      U.top.value.copy(scene.background).multiplyScalar(0.85).lerp(duskTop, dusk * 0.9);
       skyHorizon.copy(scene.background).lerp(dusk > 0 ? duskCol : white, dusk > 0 ? dusk : 0.45 * (1 - night));
-      skyMat.uniforms.horizon.value.copy(skyHorizon);
+      U.horizon.value.copy(skyHorizon);
+      U.sunV.value.copy(sunDir);
+      U.sunC.value.copy(sun.color).multiplyScalar(1 - night);
+      U.cloudA.value.copy(white).lerp(duskCloudA, dusk * 1.3).lerp(nightCloud, night);
+      U.cloudB.value.copy(dayCloudB).lerp(duskCloudB, dusk * 1.3).lerp(nightCloud, Math.min(1, night * 1.2));
+      U.time.value = clock;
+      U.cover.value = 0.34 - rain * 0.24;
+      U.stars.value = G.clamp((night - 0.6) / 0.4, 0, 1) * (1 - rain);
       scene.fog.color.copy(skyHorizon);
       scene.fog.near = 55;
       scene.fog.far = 230;
-      const up = h > 6 && h < 18.3;
+      const up = h > 5.8 && h < 18.9;
       sunSprite.visible = up && rain < 0.3;
       sunSprite.position.copy(camP.position).addScaledVector(sunDir, 330);
       sunSprite.material.color.copy(sun.color);
@@ -3004,7 +3014,9 @@
       scene.fog.far = 270;
     }
   }
-  const skyHorizon = new T.Color(), white = new T.Color(0xffffff), duskCol = new T.Color(0xffb070);
+  const skyHorizon = new T.Color(), white = new T.Color(0xffffff), duskCol = new T.Color(0xffb070), duskTop = new T.Color(0x4a4f8c);
+  const dayCloudB = new T.Color(0xb9c6d4), duskCloudA = new T.Color(0xffc8a0), duskCloudB = new T.Color(0x8a5f78), nightCloud = new T.Color(0x1c2440);
+  const moonDir = new T.Vector3(0.4, 1, 0.6).normalize();
 
   // ================= מצלמה ושקיפות מבנים =================
   const goal = new T.Vector3();
@@ -3181,14 +3193,6 @@
     if (ring.visible) {
       ring.position.set(cur.x, 0.08, cur.z);
       ring.scale.setScalar(1 + Math.sin(clock * 5) * 0.08);
-    }
-    for (const nt of notes) {
-      if (nt.life <= 0) continue;
-      nt.life -= dt;
-      nt.s.position.y += dt * 1.3;
-      nt.s.position.x += nt.vx * dt;
-      nt.s.material.opacity = G.clamp(nt.life / 1.6, 0, 1);
-      if (nt.life <= 0) nt.s.visible = false;
     }
 
     if (isThird() !== lastPixMode) resize();

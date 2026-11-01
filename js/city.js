@@ -901,6 +901,26 @@
         quad([[ax, top, az, 0, 0], [bx, top, bz, u, 0], [bx + ix, top, bz + iz, u, 0.03], [ax + ix, top, az + iz, 0, 0.03]], [0, 1, 0], !flip);
       }
     }
+    // צל רך על הקרקע לאורך הקירות: מחבר את הבניין לאדמה
+    const aoMat = new T.MeshBasicMaterial({
+      map: G.canvasTex(4, 32, (g) => {
+        const gr = g.createLinearGradient(0, 0, 0, 32);
+        gr.addColorStop(0, 'rgba(0,0,0,0)');
+        gr.addColorStop(1, 'rgba(0,0,0,.42)');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, 4, 32);
+      }, false, true),
+      transparent: true, depthWrite: false, fog: false,
+    });
+    const AO_W = 1.7, AO_Y = 0.085, aoWhite = new T.Color(1, 1, 1);
+    function groundAO(buf, b) {
+      for (const e of b.edges) {
+        const { ax, az, bx, bz, nx, nz } = e;
+        const V = [[ax, az, 1], [bx, bz, 1], [bx + nx * AO_W, bz + nz * AO_W, 0], [ax + nx * AO_W, az + nz * AO_W, 0]];
+        const up = (bz - az) * nx - (bx - ax) * nz > 0;
+        for (const k of up ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]) pushV(buf, V[k][0], AO_Y, V[k][1], 0, 1, 0, 0.5, V[k][2], aoWhite);
+      }
+    }
     // האם אפשר גג רעפים (מלבן בערך)
     function canGable(b) {
       if (b.n !== 4) return null;
@@ -983,8 +1003,9 @@
     // בניינים של אריח: קירות, גגות, רעפים ודודי שמש
     function buildTileBuildings(t, r) {
       const bufs = { res: { p: [], n: [], u: [], c: [] }, sto: { p: [], n: [], u: [], c: [] }, off: { p: [], n: [], u: [], c: [] }, roof: { p: [], n: [], u: [], c: [] }, gab: { p: [], n: [], u: [], c: [] } };
-      const solar = [];
+      const solar = [], ao = { p: [], n: [], u: [], c: [] };
       for (const b of t.B) {
+        groundAO(ao, b);
         wallsFor(b.office ? bufs.off : b.stone ? bufs.sto : bufs.res, b, 0, b.h, r() * 64);
         if (b.gable) gableFor(bufs.gab, b);
         else {
@@ -1010,6 +1031,12 @@
         m.userData = { wall: mat, roof: mat, mats: [], fade: 1, tr: false, hit: false, own: true };
         t.grp.add(m);
         t.bmeshes.push(m);
+      }
+      if (ao.p.length) {
+        const m = meshOf(ao, aoMat);
+        m.renderOrder = 1;
+        m.userData.own = true;
+        t.grp.add(m);
       }
       inst(t.grp, solarGeo, solarMat, solar.length, (im, i) => {
         const [x, y, z, ry] = solar[i];
