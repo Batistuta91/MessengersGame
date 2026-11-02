@@ -1643,7 +1643,8 @@
         sign('הבאר · מקום לצעירים', 4.8, 0.7, 0, 3.0, 0.06, { w: 144, h: 22, size: 13, bg: '#5b3f8c', fg: '#ffffff', border: '#ffd23f', lit: true }, yG);
         SP.alon = spot(YF, -1.8, 3.0);
         SP.maya = spot(YF, 1.8, 3.0);
-        SP.zoneDorm = roadSpot(YF.road, 7);
+        // נקודת המסירה: הכביש הקרוב ביותר לסטודנטים (לא לחזית שבנתונים, שיכולה להיות רחוקה)
+        SP.zoneDorm = roadSpot(nearestRoad((SP.alon.x + SP.maya.x) / 2, (SP.alon.z + SP.maya.z) / 2, 80) || YF.road, 9);
         placeName('הבאר — מקום לצעירים', 'HaBe\'er Youth Center', YF.x, YF.z, 10);
       }
 

@@ -122,8 +122,10 @@
       dorm: Object.assign({ label: 'הבאר' }, P.zoneDorm),
       plaza: Object.assign({ label: 'רחבת השחר' }, P.zonePlaza),
     };
-    for (const k in ZONES) ZONES[k].beam = makeBeam(k === 'plaza' ? 3.2 : 3.6);
+    for (const k in ZONES) ZONES[k].beam = makeBeam(k === 'plaza' ? 3.2 : k === 'dorm' ? 6 : 3.6);
     const inZone = (z) => Math.hypot(van.x - z.x, van.z - z.z) < z.r;
+    const dormVanNear = () => Math.hypot(van.x - ZONES.dorm.x, van.z - ZONES.dorm.z) < 35;
+    let dormTip = false;
 
     // מטען על גג הטנק
     const cargoGroup = new T.Group();
@@ -865,7 +867,12 @@
       if (id === 'alon' || id === 'maya') {
         if (a === 'm3') {
           const st = q('m3'), left = NEEDED.filter((x) => !st.delivered[x]).map((x) => ITEMS[x].name);
-          return { a: { s: 'npc', t: 'אתה מביא לנו שבת? מדהים! עוד חסר: ' + left.join(', ') + '. תעצור עם הטנק מול ״הבאר״.' } };
+          if (st.cargo.length && dormVanNear())
+            return {
+              a: { s: 'npc', t: 'הטנק פה! מה הבאת לנו?', c: [{ t: 'הכול בשבילכם — פורקים!', go: 'b', fx: deliver }] },
+              b: { s: 'npc', t: 'תודה! איזו שבת תהיה לנו!' },
+            };
+          return { a: { s: 'npc', t: 'אתה מביא לנו שבת? מדהים! עוד חסר: ' + left.join(', ') + '. תעצור עם הטנק בסימון הצהוב מול ״הבאר״.' } };
         }
         if (done('m3')) return { a: { s: 'npc', t: id === 'alon' ? 'השבת הכי טובה שהייתה לנו בהוד השרון. אני בפנים — מתנדב!' : 'הדלקתי נרות שבת בפעם הראשונה. תודה.' } };
         return { a: { s: 'npc', t: 'היי! אנחנו סטודנטים, מתאספים פה ב״הבאר״. השבוע זאת השבת הראשונה שלנו בעיר.' } };
@@ -902,7 +909,7 @@
         }
         if (PASS.some((p) => st.pass[p] === 'inVan') && inZone(ZONES.shul)) return { label: 'להוריד את הנוסעים ליד בית הכנסת', run: dropoff };
       }
-      if (a === 'm3' && q('m3').cargo.length && inZone(ZONES.dorm)) return { label: 'למסור את המצרכים לסטודנטים', run: deliver };
+      if (a === 'm3' && q('m3').cargo.length && inZone(ZONES.dorm)) return { label: 'למסור את המצרכים לסטודנטים', run: deliver, x: ZONES.dorm.x, z: ZONES.dorm.z };
       if (a === 'm4') {
         const st = q('m4');
         if ((st.menorah === 'van' || st.gen === 'van') && inZone(ZONES.plaza)) return { label: 'לפרוק בכיכר', run: unloadM4 };
@@ -913,6 +920,14 @@
       const a = activeId(), out = [];
       if (a === 'm3') {
         const st = q('m3');
+        // ירדו מהטנק? אפשר למסור גם ברגל, בסימון או ליד הסטודנטים
+        if (st.cargo.length) {
+          const handOver = () => (dormVanNear() ? deliver() : api.toast('המצרכים בטנק — הביאו אותו לסימון הצהוב'));
+          const label = 'למסור את המצרכים לסטודנטים';
+          out.push({ x: ZONES.dorm.x, z: ZONES.dorm.z, r: 6, label, run: handOver });
+          const al = N('alon'), my = N('maya');
+          out.push({ x: (al.x + my.x) / 2, z: (al.z + my.z) / 2, r: 4, label, run: handOver });
+        }
         if (!st.delivered.cholent && !st.cargo.includes('cholent'))
           out.push({
             x: P.kitchen.x, z: P.kitchen.z, r: 2.2, label: 'לקחת את סיר הצ׳ולנט מהמטבח',
@@ -1010,6 +1025,7 @@
         } else if (a === 'm3') {
           for (const id of NEEDED) row(ITEMS[id].name + (ITEMS[id].slots > 1 ? ' <small>2 מקומות</small>' : ''), st.delivered[id] ? '✓ נמסר' : st.cargo.includes(id) ? 'בטנק 🚐' : 'חסר', st.delivered[id] ? 'ok' : st.cargo.includes(id) ? 'later' : '');
           row('מקום בטנק', cargoSlots() + '/' + CAP, 'no');
+          if (st.cargo.length) row('מסירה', 'עצרו בסימון הצהוב ב״הבאר״', 'later');
         } else if (a === 'm4') {
           const s = st.step;
           const ld = (v) => (v === 'home' ? 'להעמיס' : v === 'van' ? 'בטנק 🚐' : '✓ בכיכר');
@@ -1171,6 +1187,9 @@
         const st2 = q('m2'), st3 = q('m3'), st4 = q('m4');
         ZONES.shul.beam.visible = a === 'm2' && PASS.some((p) => st2.pass[p] === 'inVan');
         ZONES.dorm.beam.visible = a === 'm3' && st3.cargo.length > 0;
+        const fastAtDorm = a === 'm3' && st3.cargo.length > 0 && api.drv === van && inZone(ZONES.dorm) && Math.abs(van.v) >= 2.5;
+        if (fastAtDorm && !dormTip) api.toast('הגעתם! עצרו בסימון הצהוב כדי למסור', 'gold');
+        dormTip = fastAtDorm || (dormTip && inZone(ZONES.dorm));
         ZONES.plaza.beam.visible = a === 'm4' && (st4.menorah === 'van' || st4.gen === 'van');
         for (const k in ZONES) {
           const z = ZONES[k];

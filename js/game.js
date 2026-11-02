@@ -1136,9 +1136,10 @@
       A.setStation(0);
       A.kol(false);
     } else if (A.hasSongs()) {
-      S.radio = A.KOL;
-      A.setStation(A.KOL);
-      setTimeout(kolCard, 150);
+      // הרדיו זוכר אם השחקן כיבה אותו
+      S.radio = S.settings.radioOff ? 0 : A.KOL;
+      A.setStation(S.radio);
+      if (S.radio) setTimeout(kolCard, 150);
     }
     if (!S.flags.tankTip) {
       S.flags.tankTip = true;
@@ -1224,6 +1225,7 @@
     const cycle = A.hasSongs() ? [A.KOL, 0] : [1, 2, 3, 0];
     const i = cycle.indexOf(S.radio);
     S.radio = cycle[(i + 1) % cycle.length];
+    S.settings.radioOff = !S.radio;
     A.setStation(S.radio);
     if (S.radio === A.KOL) kolCard();
     else showRadioLabel((S.radio ? '♪ ' : '') + A.stationName(S.radio));
