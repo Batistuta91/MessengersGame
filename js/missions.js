@@ -66,7 +66,8 @@
       { id: 'maya', name: 'מאיה', role: 'סטודנטית, ״הבאר״', ...P.maya,
         look: { shirt: 0xc98fa0, pants: 0x4b4e54, skin: 0xf5d6b8, hair: 0x1c1410, scale: 1.02 } },
       { id: 'zalman', name: 'ר׳ זלמן', role: 'החזן מהבניין בקצה', ...P.zalman,
-        look: { shirt: 0xffffff, jacket: 0x3a3a3a, pants: 0x2b2b2b, skin: 0xe6c2a6, hat: 'fedora', beard: 0xf0f0f0 } },
+        // זקן: כיפה גדולה, משקפיים, שיער וזקן לבנים וחליפה אפורה — שלא ייראה כמו השליח עם הכובע
+        look: { shirt: 0xffffff, jacket: 0x55555c, pants: 0x3a3a40, skin: 0xe6c2a6, kippah: 0x111111, kippahPlain: true, kippahSize: 1.8, kippahY: -0.058, hair: 0xe8e8e8, beard: 0xf4f4f4, glasses: true, suitGlow: 0x1c1c22, scale: 1.0 } },
     ];
     for (const d of NEW_NPCS) api.addNPC(d);
     const N = (id) => npcById[id];

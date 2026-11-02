@@ -8,10 +8,11 @@ $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist 'web'
 if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'index.html') -Destination $stage
+foreach ($f in @('index.html', 'manifest.webmanifest', 'sw.js')) { Copy-Item -LiteralPath (Join-Path $root $f) -Destination $stage }
 foreach ($d in @('css', 'js', 'lib', 'assets')) { Copy-Item -LiteralPath (Join-Path $root $d) -Destination $stage -Recurse }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'data') | Out-Null
-foreach ($c in @('city.js', 'city-pt.js')) { Copy-Item -LiteralPath (Join-Path $root ('data\' + $c)) -Destination (Join-Path $stage 'data') }
+# כל קבצי הנתונים שהמשחק טוען (עיר, רכבים, דמויות, קרקע) — בלי נתוני OSM הגולמיים
+Get-ChildItem -LiteralPath (Join-Path $root 'data') -File -Filter *.js | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stage 'data') }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'music') | Out-Null
 # רק שירים מהתיקייה music עצמה — לא מ-music\local
 $exts = @('.mp3', '.m4a', '.ogg', '.wav', '.aac', '.webm')

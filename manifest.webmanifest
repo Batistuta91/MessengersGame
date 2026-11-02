@@ -1,0 +1,24 @@
+{
+  "id": "./",
+  "name": "השליחים: אין פה רגע דל — Grand Theft Mitzvah",
+  "short_name": "השליחים",
+  "description": "סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאירו אותה.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#13213f",
+  "theme_color": "#13213f",
+  "categories": ["games"],
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "assets/og.jpg", "sizes": "1200x630", "type": "image/jpeg", "form_factor": "wide", "label": "טנק המבצעים" }
+  ]
+}

@@ -18,10 +18,23 @@
   <title>השליחים: אין פה רגע דל — Grand Theft Mitzvah</title>
   <meta name="description" content="Grand Theft Mitzvah — סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאירו אותה. משחק חינם בדפדפן.">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <!-- התקנה כאפליקציה (PWA) ותמונה לשיתוף קישור -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="השליחים">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="השליחים: אין פה רגע דל — Grand Theft Mitzvah">
+  <meta property="og:description" content="סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאירו אותה. משחק חינם בדפדפן.">
+  <meta property="og:image" content="https://batistuta91.github.io/MessengersGame/assets/og.jpg">
+  <meta property="og:url" content="https://batistuta91.github.io/MessengersGame/">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261102b">
+  <link rel="stylesheet" href="css/style.css?v=20261102m">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -188,13 +201,15 @@
   <!-- מסך פתיחה -->
   <div id="title" class="overlay title">
     <div class="title-card">
-      <div class="badge">חינם בדפדפן · בלי התקנה</div>
+      <div class="badge">חינם בדפדפן · אפשר גם להתקין</div>
       <h1>השליחים<span>אין פה רגע דל</span><em class="en-sub">Grand Theft Mitzvah</em></h1>
       <p class="tagline">סיפור שליחות בעיר הגדולה. טנק אחד, אלף זכויות — ועיר שלמה שמחכה שיאירו אותה.</p>
       <div class="title-btns">
         <button id="btn-play" class="btn big" disabled>⏳ טוען את העיר...</button>
         <button id="btn-new" class="btn ghost hidden">משחק חדש</button>
+        <button id="btn-install" class="btn ghost hidden">📲 התקנה כאפליקציה</button>
       </div>
+      <p id="install-ios" class="mobile-hint hidden">באייפון: לחצו על כפתור השיתוף <b>⬆</b> ואז ״הוספה למסך הבית״</p>
       <p class="mobile-hint">בטלפון: לחצו ״שחקו״ וסובבו את המכשיר לרוחב</p>
       <p class="credit">מרכז הוד השרון · נתוני מפה: © OpenStreetMap contributors (ODbL)</p>
     </div>
@@ -202,21 +217,21 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js?v=20261102b"></script>
-  <script src="js/util.js?v=20261102b"></script>
-  <script src="music/playlist.js?v=20261102b"></script>
+  <script src="lib/three.min.js?v=20261102m"></script>
+  <script src="js/util.js?v=20261102m"></script>
+  <script src="music/playlist.js?v=20261102m"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js?v=20261102b" onerror="this.remove()"></script>
-  <script src="js/audio.js?v=20261102b"></script>
+  <script src="music/playlist.local.js?v=20261102m" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261102m"></script>
   <!-- רכבים: מודלים אמיתיים (CC0) -->
-  <script src="data/vehicles.js?v=20261102b"></script>
-  <script src="js/vehmodels.js?v=20261102b"></script>
-  <script src="data/ground.js?v=20261102b"></script>
-  <script src="data/facade.js?v=20261102b"></script>
-  <script src="data/nature.js?v=20261102b"></script>
-  <script src="js/nature.js?v=20261102b"></script>
-  <script src="js/entities.js?v=20261102b"></script>
-  <script src="js/world.js?v=20261102b"></script>
+  <script src="data/vehicles.js?v=20261102m"></script>
+  <script src="js/vehmodels.js?v=20261102m"></script>
+  <script src="data/ground.js?v=20261102m"></script>
+  <script src="data/facade.js?v=20261102m"></script>
+  <script src="data/nature.js?v=20261102m"></script>
+  <script src="js/nature.js?v=20261102m"></script>
+  <script src="js/entities.js?v=20261102m"></script>
+  <script src="js/world.js?v=20261102m"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -227,24 +242,46 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261102b"><\/script>');
+      document.write('<script src="data/' + (c === 'pt' ? 'city-pt.js' : 'city.js') + '?v=20261102m"><\/script>');
     })();
   </script>
   <script>
     // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
-    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261102b"><\/script>');
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261102m"><\/script>');
   </script>
-  <script src="js/city.js?v=20261102b"></script>
-  <script src="js/missions.js?v=20261102b"></script>
-  <script src="js/missions-pt.js?v=20261102b"></script>
-  <script src="js/traffic.js?v=20261102b"></script>
-  <script src="js/events.js?v=20261102b"></script>
-  <script src="js/collect.js?v=20261102b"></script>
-  <script src="js/matzah.js?v=20261102b"></script>
-  <script src="js/pesach.js?v=20261102b"></script>
-  <script src="js/voice.js?v=20261102b"></script>
-  <script src="lib/GLTFLoader.js?v=20261102b"></script>
-  <script src="js/realchar.js?v=20261102b"></script>
-  <script src="js/game.js?v=20261102b"></script>
+  <script src="js/city.js?v=20261102m"></script>
+  <script src="js/missions.js?v=20261102m"></script>
+  <script src="js/missions-pt.js?v=20261102m"></script>
+  <script src="js/traffic.js?v=20261102m"></script>
+  <script src="js/events.js?v=20261102m"></script>
+  <script src="js/collect.js?v=20261102m"></script>
+  <script src="js/matzah.js?v=20261102m"></script>
+  <script src="js/pesach.js?v=20261102m"></script>
+  <script src="js/voice.js?v=20261102m"></script>
+  <script src="lib/GLTFLoader.js?v=20261102m"></script>
+  <script src="js/realchar.js?v=20261102m"></script>
+  <script src="js/game.js?v=20261102m"></script>
+  <script>
+    // התקנה כאפליקציה: רישום ה-Service Worker וכפתור ״התקנה״ במסך הפתיחה
+    (function () {
+      if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(function () {});
+      var installed = (window.matchMedia && matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) || navigator.standalone;
+      if (installed) return;
+      var btn = document.getElementById('btn-install'), prompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        prompt = e;
+        btn.classList.remove('hidden');
+      });
+      btn.addEventListener('click', function () {
+        if (!prompt) return;
+        prompt.prompt();
+        prompt.userChoice.then(function () { prompt = null; btn.classList.add('hidden'); });
+      });
+      window.addEventListener('appinstalled', function () { btn.classList.add('hidden'); });
+      // באייפון אין כפתור התקנה אוטומטי — רק הסבר קצר
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) document.getElementById('install-ios').classList.remove('hidden');
+    })();
+  </script>
 </body>
 </html>

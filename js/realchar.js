@@ -152,7 +152,7 @@
     attachAt(head, g, new T.Vector3(cx, top - R + 0.012, cz - 0.012), root);
   }
 
-  function addKippah(root, head, body, hair, color, plain, size) {
+  function addKippah(root, head, body, hair, color, plain, size, dy) {
     const { top, cx, cz } = headRing(body, hair);
     const k = new T.Group();
     if (size) k.scale.setScalar(size);
@@ -166,7 +166,7 @@
       k.add(rim);
     }
     k.rotation.x = -0.35;
-    attachAt(head, k, new T.Vector3(cx, top - 0.032, cz - 0.035), root);
+    attachAt(head, k, new T.Vector3(cx, top - 0.032 + (dy || 0), cz - 0.035), root);
   }
 
   // משקפיים: מסגרת מתכת דקה, לפי מיקום הפנים הנמדד בגובה העיניים
@@ -356,6 +356,13 @@
         m.side = cut ? T.DoubleSide : T.FrontSide;
         if (/beard|moustache/i.test(m.name)) m.color.set(opts.beard !== undefined ? opts.beard : 0x5a4030);
         else if (HAIR.test(m.name) || /eyebrow/i.test(m.name)) m.color.set(opts.hair !== undefined ? opts.hair : 0x5a4030);
+        // שיער וזקן לבנים: הטקסטורה כהה וכפל צבע לא מבהיר אותה — לוקחים ממנה רק שקיפות ומעט פרטים
+        if (cut && m.map && m.color.r + m.color.g + m.color.b > 2.4) {
+          m.onBeforeCompile = (sh) => {
+            sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb = diffuse * (0.72 + 0.28 * clamp(dot(diffuseColor.rgb / max(diffuse, vec3(0.01)), vec3(1.0)) * 1.5, 0.0, 1.0));');
+          };
+          m.customProgramCacheKey = () => 'whiteHair';
+        }
         if (/shoes/i.test(m.name)) {
           m.color.set(opts.shoes !== undefined ? opts.shoes : 0x222222);
           if (opts.shoes !== undefined) m.map = null; // נעל בהירה: הטקסטורה הכהה הייתה מכהה אותה
@@ -372,7 +379,7 @@
     const srcRoot = an.scene.clone();
     const retarget = makeRetarget(srcRoot, root, bones);
     if (opts.hat) addHat(root, head, body, hair, opts.hat);
-    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah, opts.kippahPlain, opts.kippahSize);
+    if (opts.kippah !== undefined) addKippah(root, head, body, hair, opts.kippah, opts.kippahPlain, opts.kippahSize, opts.kippahY);
     if (opts.tichel !== undefined) addTichel(root, head, body, hair, opts.tichel);
     if (opts.glasses) addGlasses(root, head, body, hair);
     let cloth = null;

@@ -393,13 +393,13 @@
   // דמויות מציאותיות לדמויות הקבועות — רשימה מפורשת של הדגם בלבד. כל השאר (אביזרים, שיער, זקן, כיפה, עור)
   // נלקח מ-look המקורי, כדי שהדמות תישאר מי שהיא. לא ברשימה (נשים, ילדים, הרץ עידו) — נשארים קלאסיים
   const REAL_NPC = {
-    moshe: 'moshe', yossi: 'secular1', cohen: 'secular2', daniel: 'suit', roi: 'worker', avraham: 'moshe', shimon: 'dati', alon: 'striped', zalman: 'haredi',
+    moshe: 'moshe', yossi: 'secular1', cohen: 'secular2', daniel: 'suit', roi: 'worker', avraham: 'moshe', shimon: 'dati', alon: 'striped', zalman: 'zalman',
     pt_shimshon: 'dati', pt_avi: 'striped', pt_moti: 'secular1', pt_rachamim: 'dati', pt_father: 'secular2', pt_yoel: 'moshe',
     maya: 'maya', ido: 'ido', ev_nachman: 'nachman',
     ev_yaakov: 'dati', ev_haim: 'worker', ev_david: 'secular1', ev_zaken: 'moshe', ev_levi: 'secular2',
   };
   function realOpts(L) {
-    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, kippahSize: L.kippahSize, tichel: L.tichel, shoes: L.shoes, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
+    const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, kippahSize: L.kippahSize, kippahY: L.kippahY, tichel: L.tichel, shoes: L.shoes, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
     if (L.hat) Object.assign(o, { hat: 'homburg', tzitzit: true, hair: L.hair !== undefined ? L.hair : 0x3a2a1a });
     // עור: יחס לגוון הבהיר של הדגם, כדי שגם דמות כהה תישאר כהה
     if (L.skin !== undefined) {
@@ -416,7 +416,7 @@
     if (!key) return;
     n.rcLoading = rcBusy = true;
     const opts = realOpts(n.def.look);
-    if (key === 'moshe') opts.shirtFront = true;
+    if (key === 'moshe' || key === 'zalman') opts.shirtFront = true;
     G.loadNPCChar(ASSET_V, key, opts, (rc) => {
       rcBusy = false;
       n.rc = rc;
