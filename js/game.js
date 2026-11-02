@@ -396,6 +396,7 @@
     moshe: 'moshe', yossi: 'secular1', cohen: 'secular2', daniel: 'suit', roi: 'worker', avraham: 'moshe', shimon: 'dati', alon: 'striped', zalman: 'haredi',
     pt_shimshon: 'dati', pt_avi: 'striped', pt_moti: 'secular1', pt_rachamim: 'dati', pt_father: 'secular2', pt_yoel: 'moshe',
     maya: 'maya', ido: 'ido', ev_nachman: 'nachman',
+    ev_yaakov: 'dati', ev_haim: 'worker', ev_david: 'secular1', ev_zaken: 'moshe', ev_levi: 'secular2',
   };
   function realOpts(L) {
     const o = { hair: L.hair, beard: L.beard, noBeard: L.beard === undefined, kippah: L.kippah, kippahPlain: L.kippahPlain, kippahSize: L.kippahSize, tichel: L.tichel, shoes: L.shoes, glasses: L.glasses, suitGlow: L.suitGlow, scale: L.scale, tzitzit: L.tzitzit, cap: L.cap, headphones: L.headphones, apron: L.apron, backpack: L.backpack, phone: L.phone };
@@ -426,7 +427,10 @@
   function attachRealWalker(w) {
     if (S.settings.realChar === false || !G.loadNPCChar || w.rc || w.rcLoading || rcBusy) return;
     w.rcLoading = rcBusy = true;
-    G.loadNPCChar(ASSET_V, w.rcKey, Object.assign(realOpts(w.look), { top: w.look.shirt, bottom: w.look.pants, scale: 1.02 }), (rc) => {
+    const woman = /^w_|^maya$/.test(w.rcKey);
+    // ערכי העור הקלאסיים של עוברי האורח יוצאים כתומים על הדגם המציאותי: גוונים טבעיים עדינים
+    const natural = { skin: [undefined, 0xf2dcc8, 0xe8c8ac][walkers.indexOf(w) % 3] };
+    G.loadNPCChar(ASSET_V, w.rcKey, Object.assign(realOpts(w.look), woman ? { top: w.look.shirt, bottom: w.look.pants, scale: 1.02 } : natural), (rc) => {
       rcBusy = false;
       w.rc = rc;
       w.p.group.add(rc.group);
@@ -500,6 +504,7 @@
     else if (r < 0.55) look.cap = SHIRTS[(wr() * SHIRTS.length) | 0];
     else look.hair = HAIRS[(wr() * HAIRS.length) | 0];
     const p = G.makePerson(look);
+    p.look0 = look;
     scene.add(p.group);
     const icon = G.makeIcon('hey');
     icon.position.y = 2.8;
@@ -519,6 +524,13 @@
     walkers.push(w);
   }
   for (let i = 0; i < (cityPaths ? 26 : 14); i++) spawnWalker();
+  // כל עובר אורח רביעי מקבל דמות מציאותית שמתאימה למראה שלו (חרדי, דתי, חילוני)
+  walkers.forEach((w, i) => {
+    if (i % 4) return;
+    const L = w.look = w.p.look0;
+    w.rcKey = L.hat ? 'haredi' : L.kippah !== undefined ? 'dati' : ['secular1', 'striped', 'secular2', 'worker'][(i / 4) % 4];
+    rcWalkers.push(w);
+  });
   // עוברות אורח בלבוש צנוע, לפי תמונות הייחוס (נטענות רק כשמתקרבים)
   for (const woman of [
     { key: 'w_hilonit', look: { shirt: 0x9fb8d6, pants: 0xb9ab97, skin: 0xe2b088, hair: 0x1c1410 } },
@@ -2264,7 +2276,7 @@
       if (m.status === 'active') return 'hint';
       return S.chabadLevel < 2 ? 'star' : M.mosheIcon();
     }
-    if (m.status !== 'active' || CITY === 'pt') return M.iconFor(n);
+    if (m.status !== 'active' || CITY === 'pt' || !(n.id in m.targets)) return M.iconFor(n);
     const o = m.targets[n.id];
     if (o === 'accepted') return 'ok';
     if (o === 'declined') return null;
