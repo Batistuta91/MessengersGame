@@ -668,6 +668,7 @@
       if (cer.lit === 9 && Math.random() < dt * 4) burst(MX + (Math.random() - 0.5) * 3, 6 + Math.random() * 2, MZ + (Math.random() - 0.5) * 3, 6);
       if (cer.t > 9 * 0.75 + 4) {
         cer = null;
+        if (S().radio === 1) api.setRadio(0);
         completeM4('done');
       }
     }

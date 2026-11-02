@@ -694,7 +694,8 @@
     audioReady = true;
     A.init();
     A.setEnabled(S.settings.sound);
-    if (S.radio === A.KOL && !drv) S.radio = 0;
+    // משחק שמור עם ניגון ישן מתחיל ברדיו כבוי
+    if ((S.radio === A.KOL && !drv) || (S.radio !== A.KOL && A.hasSongs())) S.radio = 0;
     A.setStation(S.radio);
   }
 
@@ -1206,7 +1207,7 @@
       save();
     }
   }
-  // R: קול חב״ד ← ניגונים ← כבוי (בכל כלי רכב)
+  // R: קול חב״ד ← כבוי (בכל כלי רכב); ניגונים מסונתזים רק אם אין שירים
   function radio() {
     if (!drv) {
       toast('הרדיו עובד כשנוסעים — עלו על כלי רכב');
@@ -1220,7 +1221,7 @@
       toast('בניידת של ברסלב יש רק שיר אחד — נח נחמן מאומן! 🎶');
       return;
     }
-    const cycle = (A.hasSongs() ? [A.KOL] : []).concat([1, 2, 3, 0]);
+    const cycle = A.hasSongs() ? [A.KOL, 0] : [1, 2, 3, 0];
     const i = cycle.indexOf(S.radio);
     S.radio = cycle[(i + 1) % cycle.length];
     A.setStation(S.radio);
@@ -2069,7 +2070,7 @@
     setRadio(i) {
       S.radio = i;
       A.setStation(i);
-      showRadioLabel('♪ ' + A.stationName(i));
+      showRadioLabel((i ? '♪ ' : '') + A.stationName(i));
     },
   });
   TR = G.makeTraffic ? G.makeTraffic({ scene, W, A, player }) : null;

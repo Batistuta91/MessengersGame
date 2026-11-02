@@ -423,6 +423,7 @@
       const st = q('pt3');
       if (st.status !== 'active') return;
       st.status = 'complete';
+      if (S().radio === 1) api.setRadio(0);
       marchers.forEach((m) => (m.p.group.visible = false));
       chuppah.visible = false;
       api.addJoy(20);
