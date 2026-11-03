@@ -269,12 +269,16 @@
     });
     const audience = waiting.flat();
     let boarding = -1;
+    // מי שכבר נכנס לטנק — לא מופיע שוב בנקודת האיסוף
+    const aboard = new Set();
     function waitPos(i, k) {
       const p = PICK[i], r = p.rot, rx = Math.cos(r), rz = -Math.sin(r);
       return [p.x + rx * (k - (COUNTS[i] - 1) / 2) * 1.0, p.z + rz * (k - (COUNTS[i] - 1) / 2) * 1.0];
     }
     function startRh2() {
       S().quests.rh2 = Object.assign(DEF.rh2(), { status: 'active' });
+      aboard.clear();
+      boarding = -1;
       daylight(13);
       A.success();
       api.toast('״סבא סעדיה מספר״ — אוספים ' + TOTAL + ' אנשים משלוש נקודות, לפני מנחה!', 'gold');
@@ -964,7 +968,7 @@
         const st2 = q('rh2');
         waiting.forEach((list, i) => {
           list.forEach((m, k) => {
-            const show = a === 'rh2' && st2.step === 'collect' && (!st2.picked[i] || boarding === i);
+            const show = a === 'rh2' && st2.step === 'collect' && !aboard.has(m) && (!st2.picked[i] || boarding === i);
             if (!show) {
               if (m.on && !(a === 'rh2' && st2.step !== 'collect')) setOn(m, false);
               return;
@@ -977,10 +981,13 @@
             if (boarding === i) {
               // הולכים לדלת של הטנק ונכנסים
               const dx = van.x + Math.cos(van.h) * 1.6, dz = van.z - Math.sin(van.h) * 1.6;
-              if (walkTo(m, dx, dz, 4, dt, t) < 0.6) setOn(m, false);
+              if (walkTo(m, dx, dz, 4, dt, t) < 0.6) {
+                setOn(m, false);
+                aboard.add(m);
+              }
             } else idle(m, t, PICK[i].road.x, PICK[i].road.z);
           });
-          if (boarding === i && list.every((m) => !m.on)) boarding = -1;
+          if (boarding === i && list.every((m) => aboard.has(m))) boarding = -1;
         });
         if (a === 'rh2') {
           if (st2.step === 'story') audience.forEach((m) => idle(m, t, saadia.x, saadia.z));

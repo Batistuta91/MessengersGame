@@ -506,6 +506,8 @@
     function completeSecretPT() {
       const st = q('ptS');
       st.status = 'complete';
+      // ראש העין נפתחת; ר׳ מנחם יתקשר להודות ולשלוח ליציאה
+      S().flags.rhUnlocked = true;
       api.addJoy(20);
       api.addCommunity(3);
       api.save();
@@ -591,30 +593,46 @@
       pt3: () => (q('pt3').step === 'march' ? 'הובל את התהלוכה לבית הכנסת הגדול. לאט — שכולם יעמדו בקצב.' : 'ריקודים!'),
       ptS: () => ({ meet: 'ר׳ יואל יושב בכיכר המתנדבים. בלי לחץ — פשוט לשבת לידו.', ride: 'הביאו את הטנק לכיכר ואספו את ר׳ יואל.', drive: 'סעו לאט לבית הכנסת הגדול, ותקשיבו לסיפורים.', done: '' }[q('ptS').step]),
     };
-    const SECRET_OFFER = () => ({
-      a: { s: 'npc', t: 'שליח, יש משהו שלא סיפרתי לך. בכיכר המתנדבים יושב כל יום זקן אחד, ר׳ יואל. נכד של מייסדי המושבה.', go: 'b' },
-      b: { s: 'npc', t: 'אין פה שעון ואין פרס. רק... תעבור לידו? סימנתי לך במפה.', c: [{ t: 'אני בדרך.', fx: startSecretPT }, { t: 'אחר כך', fx: () => (q('ptS').status = 'idle') }] },
+    // סוף פרק 2: שיחה אחת עם ר׳ מנחם — לעזור לר׳ יואל, או לנסוע ישר לראש העין.
+    // ״ישר לראש העין״ = מוותרים על ר׳ יואל, והקו במפה מוביל ליציאה מהעיר.
+    // מי שעוזר — מקבל אחר כך טלפון תודה, ורק אז נשלח לראש העין.
+    const goRH = () => {
+      S().flags.rhUnlocked = true;
+      api.save();
+      api.goCity('rh');
+    };
+    const END_OFFER = () => ({
+      a: { s: 'npc', t: 'הסדר הזה — פתח תקווה לא תשכח אותו. ור׳ שלום, השליח של ראש העין, כבר התקשר: הוא מחכה לך שם.', go: 'b' },
+      b: { s: 'npc', t: 'אבל לפני שאתה יוצא — יש פה מישהו שצריך עזרה. בכיכר המתנדבים יושב כל יום זקן אחד, ר׳ יואל, נכד של מייסדי המושבה. אין שעון ואין פרס — רק לשבת לידו.', c: [{ t: 'קודם אעזור לר׳ יואל', go: 'y' }, { t: 'אני נוסע ישר לראש העין', go: 'r' }] },
+      y: { s: 'npc', t: 'ידעתי. סימנתי לך אותו במפה. וכשתסיים — אתקשר.', c: [{ t: 'אני בדרך.', fx: startSecretPT }] },
+      r: { s: 'npc', t: 'בסדר גמור, אני אשב איתו בעצמי. סימנתי לך במפה את היציאה לראש העין — סע בטנק מזרחה. ר׳ שלום מחכה!', c: [{ t: '🚐 יוצא לראש העין!', fx: goRH }] },
     });
-    // פרק 3: אחרי הסדר, ר׳ מנחם שולח לראש העין (היציאה במזרח העיר)
-    const RH_OFFER = () => ({
-      a: { s: 'npc', t: 'שליח, קיבלתי טלפון מראש העין. ר׳ שלום, השליח שם — בחור צעיר, ממשפחה תימנית ותיקה בעיר — צריך עזרה.', go: 'b' },
-      b: { s: 'npc', t: 'העיר שם גדלה מהר: שכונות חדשות במזרח, משפחות צעירות שרק הגיעו — ובמערב, הוותיקים שבנו את המקום. הוא רוצה לחבר בין שני החלקים. סימנתי לך במפה את היציאה לראש העין.', c: [{ t: 'יוצא לראש העין!', fx: () => { S().flags.rhUnlocked = true; api.goCity('rh'); } }, { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.rhUnlocked = true; api.toast('היציאה לראש העין מסומנת במפה (' + (isTouch ? 'כפתור המפה' : 'M') + ')', 'gold'); } }] },
+    const THANKS = () => ({
+      a: { s: 'npc', t: 'שמעתי מה עשית עם ר׳ יואל — כל בית הכנסת הגדול מדבר על זה. תודה, שליח.', go: 'b' },
+      b: { s: 'npc', t: 'ועכשיו — ר׳ שלום מחכה לך בראש העין. סימנתי לך במפה את היציאה מהעיר.', c: [{ t: '🚐 יוצא לראש העין!', fx: () => { S().flags.rhThanked = true; goRH(); } }] },
     });
-    const rhPending = () => pesachDone() && !S().flags.rhUnlocked;
+    // הסדר הושלם ועוד לא בחרו: ר׳ יואל או ראש העין
+    const endPending = () => pesachDone() && !S().flags.rhUnlocked && !done('ptS') && q('ptS').status !== 'active';
+    const thanksPending = () => done('ptS') && !S().flags.rhThanked && !S().flags.rhVisited;
     function mosheDialog() {
       const a = activeId();
-      if (!a && rhPending()) return RH_OFFER();
-      if (!a && pesachDone() && (q('ptS').status === 'idle' || q('ptS').status === 'locked')) return SECRET_OFFER();
+      if (!a && endPending()) return END_OFFER();
+      if (!a && thanksPending()) return THANKS();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (q(a).timeLeft !== undefined ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx]();
-      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. ר׳ שלום מחכה לך בראש העין, והדרך להוד השרון תמיד פתוחה — היציאות מסומנות במפה. ותבוא לבקר!', c: [{ t: 'עוד קצת פה' }, { t: '🚐 נוסעים לראש העין', fx: () => api.goCity('rh') }] } };
+      const c = [{ t: '🚐 נוסעים לראש העין', fx: goRH }, { t: 'עוד קצת פה' }];
+      // ויתרו על ר׳ יואל? אפשר עדיין לחזור אליו
+      if (!done('ptS')) c.splice(1, 0, { t: 'ר׳ יואל עוד יושב בכיכר?', go: 'y' });
+      return {
+        a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. ר׳ שלום מחכה לך בראש העין, והדרך להוד השרון תמיד פתוחה — היציאות מסומנות במפה. ותבוא לבקר!', c },
+        y: { s: 'npc', t: 'כל יום, באותו ספסל. סימנתי לך אותו במפה.', c: [{ t: 'אני בדרך.', fx: startSecretPT }] },
+      };
     }
     function mosheIcon() {
       if (activeId()) return 'hint';
-      if (rhPending()) return 'mission';
+      if (endPending() || thanksPending()) return 'mission';
       const nx = nextQuest();
-      if (!nx && pesachDone() && q('ptS').status !== 'complete') return 'mission';
       return nx && available(nx) ? 'mission' : null;
     }
 
@@ -724,7 +742,7 @@
       }
       // אין משימה פעילה אבל יש מה להתחיל: המפה מובילה לר׳ מנחם
       const nx = nextQuest();
-      if (!a && ((nx && available(nx)) || q('ptS').status === 'idle')) return api.npcById.moshe;
+      if (!a && ((nx && available(nx)) || endPending())) return api.npcById.moshe;
       return null;
     }
     function mapDots(dot) {
@@ -771,8 +789,7 @@
       if (nx) return '<div class="tr-title">' + TITLES[nx] + '</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד פתח תקווה <span class="ic blue">!</span></div>';
       // אחרי ברסלב: משימת המצות (מנוהלת ב-js/pesach.js)
       if (!pesachDone()) return '<div class="tr-title">🫓 פרק 2 · משימה 4 · ״מצה שמורה לכל השכונה״</div><div class="tr-obj">פסח מתקרב! דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
-      if (rhPending()) return '<div class="tr-title">פרק 3 · ראש העין</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
-      if (q('ptS').status === 'idle') return '<div class="tr-title">' + TITLES.ptS + '</div><div class="tr-obj">ר׳ יואל מחכה בכיכר. ' + MEN + ' יודע איפה.</div>';
+      if (endPending()) return '<div class="tr-title">✓ פרק 2 · כמעט הסוף</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
       return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">' + (done('ptS') ? 'גם ר׳ יואל חזר לבית הכנסת. ' : '') + 'פרק 3 מחכה: ר׳ שלום בראש העין. סעו בטנק ליציאה מזרחה — היא מסומנת במפה 🚐</div>';
     }
 
@@ -809,8 +826,8 @@
         const nx = nextQuest();
         // את הפגישה הראשונה עושים פנים אל פנים, ליד בית חב״ד
         if (nx === 'pt1' && !S().flags.ptMet) return null;
-        if (!nx && rhPending()) return { id: 'rh', nodes: RH_OFFER() };
-        if (!nx && pesachDone() && q('ptS').status === 'locked') return { id: 'ptS', nodes: SECRET_OFFER() };
+        if (!nx && endPending()) return { id: 'ptEnd', nodes: END_OFFER() };
+        if (!nx && thanksPending()) return { id: 'rhThanks', nodes: THANKS() };
         return nx && available(nx) ? { id: nx, nodes: OFFER[nx]() } : null;
       },
       update(dt) {

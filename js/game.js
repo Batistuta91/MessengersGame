@@ -2877,7 +2877,7 @@
       // סיימתם את הוד השרון ועוד לא הייתם בפתח תקווה: הקו מוביל ליציאה מהעיר
       if (!t && CITY === 'hod' && ptOpen() && !S.flags.ptVisited && !S.cities.pt && !M.activeQuest()) t = exitTo('pt');
       // ואחרי פסח בפתח תקווה — לראש העין
-      if (!t && CITY === 'pt' && cityOpen('rh') && !S.flags.rhVisited && !S.cities.rh && !M.activeQuest()) t = exitTo('rh');
+      if (!t && CITY === 'pt' && S.flags.rhUnlocked && !S.flags.rhVisited && !S.cities.rh && !M.activeQuest()) t = exitTo('rh');
       return t && Math.hypot(t.x - player.x, t.z - player.z) > 5 ? t : null;
     }
     let best = null, bd = 1e9;
