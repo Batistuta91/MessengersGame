@@ -714,9 +714,22 @@
     for (const k in keys) keys[k] = false;
     if (mode === 'play') pauseGame();
   });
+  // המסך לא מחשיך באמצע משחק (Wake Lock). הדפדפן משחרר את הנעילה כשיוצאים מהאפליקציה — מבקשים שוב כשחוזרים
+  let wakeLock = null;
+  function keepAwake() {
+    if (wakeLock || mode === 'title' || document.hidden || !navigator.wakeLock) return;
+    wakeLock = true;
+    navigator.wakeLock.request('screen').then((l) => {
+      wakeLock = l;
+      l.addEventListener('release', () => (wakeLock = null));
+    }, () => (wakeLock = null));
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
+    else keepAwake();
   });
+  // בחלק מהדפדפנים (אייפון) הבקשה עובדת רק אחרי נגיעה
+  document.addEventListener('pointerdown', keepAwake);
   window.addEventListener('beforeunload', save);
   document.addEventListener('pointerdown', initAudioOnce);
   let audioReady = false;
@@ -2055,6 +2068,7 @@
   $('btn-new').addEventListener('click', () => openConfirm());
   function startPlay() {
     mode = 'play';
+    keepAwake();
     if (S.flags.justTraveled) {
       const to = S.flags.justTraveled;
       S.flags.justTraveled = null;

@@ -345,6 +345,8 @@ body.smooth canvas#game, body.smooth canvas { image-rendering: auto; }
 #bigmap .btn { padding: 4px 12px; font-size: 18px; min-width: 40px; }
 body.touch #bigmap .bm-tip { display: none; }
 #bigmap #bm-travel { white-space: nowrap; font-size: 15px; }
+#bigmap .bm-bar { max-width: calc(100vw - 20px); }
+#bigmap .bm-bar .btn { flex-shrink: 0; }
 
 /* שורת כפתורים בתפריט ההשהיה */
 .p-row { display: flex; gap: 8px; }
