@@ -10,7 +10,7 @@
     const city = W.cityId || 'hod';
     const COUNT = W.HALF > 1000 ? 18 : 12;
     // מיקומים קבועים לכל עיר (אותו זרע תמיד), על מדרכות, רחוקים זה מזה
-    const r = G.rng(city === 'pt' ? 7700 : 1100);
+    const r = G.rng({ pt: 7700, rh: 3300 }[city] || 1100);
     const spots = [];
     const lim = W.HALF - 60;
     for (let k = 0; k < 4000 && spots.length < COUNT; k++) {
@@ -19,7 +19,7 @@
       const x = pt[0], z = pt[1];
       if (Math.abs(x) > lim || Math.abs(z) > lim) continue;
       if (W.collide(x, z, 0.8).hit) continue;
-      const minD = city === 'pt' ? 380 : 140;
+      const minD = W.HALF > 1000 ? 380 : 140;
       if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < minD)) continue;
       spots.push({ x, z });
     }

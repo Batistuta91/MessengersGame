@@ -595,16 +595,24 @@
       a: { s: 'npc', t: 'שליח, יש משהו שלא סיפרתי לך. בכיכר המתנדבים יושב כל יום זקן אחד, ר׳ יואל. נכד של מייסדי המושבה.', go: 'b' },
       b: { s: 'npc', t: 'אין פה שעון ואין פרס. רק... תעבור לידו? סימנתי לך במפה.', c: [{ t: 'אני בדרך.', fx: startSecretPT }, { t: 'אחר כך', fx: () => (q('ptS').status = 'idle') }] },
     });
+    // פרק 3: אחרי הסדר, ר׳ מנחם שולח לראש העין (היציאה במזרח העיר)
+    const RH_OFFER = () => ({
+      a: { s: 'npc', t: 'שליח, קיבלתי טלפון מראש העין. ר׳ שלום, השליח שם — בחור צעיר, ממשפחה תימנית ותיקה בעיר — צריך עזרה.', go: 'b' },
+      b: { s: 'npc', t: 'העיר שם גדלה מהר: שכונות חדשות במזרח, משפחות צעירות שרק הגיעו — ובמערב, הוותיקים שבנו את המקום. הוא רוצה לחבר בין שני החלקים. סימנתי לך במפה את היציאה לראש העין.', c: [{ t: 'יוצא לראש העין!', fx: () => { S().flags.rhUnlocked = true; api.goCity('rh'); } }, { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.rhUnlocked = true; api.toast('היציאה לראש העין מסומנת במפה (' + (isTouch ? 'כפתור המפה' : 'M') + ')', 'gold'); } }] },
+    });
+    const rhPending = () => pesachDone() && !S().flags.rhUnlocked;
     function mosheDialog() {
       const a = activeId();
+      if (!a && rhPending()) return RH_OFFER();
       if (!a && pesachDone() && (q('ptS').status === 'idle' || q('ptS').status === 'locked')) return SECRET_OFFER();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (q(a).timeLeft !== undefined ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx]();
-      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון — היציאה מהעיר מסומנת במפה. ותבוא לבקר!' } };
+      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. ר׳ שלום מחכה לך בראש העין, והדרך להוד השרון תמיד פתוחה — היציאות מסומנות במפה. ותבוא לבקר!', c: [{ t: 'עוד קצת פה' }, { t: '🚐 נוסעים לראש העין', fx: () => api.goCity('rh') }] } };
     }
     function mosheIcon() {
       if (activeId()) return 'hint';
+      if (rhPending()) return 'mission';
       const nx = nextQuest();
       if (!nx && pesachDone() && q('ptS').status !== 'complete') return 'mission';
       return nx && available(nx) ? 'mission' : null;
@@ -763,8 +771,9 @@
       if (nx) return '<div class="tr-title">' + TITLES[nx] + '</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד פתח תקווה <span class="ic blue">!</span></div>';
       // אחרי ברסלב: משימת המצות (מנוהלת ב-js/pesach.js)
       if (!pesachDone()) return '<div class="tr-title">🫓 פרק 2 · משימה 4 · ״מצה שמורה לכל השכונה״</div><div class="tr-obj">פסח מתקרב! דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
+      if (rhPending()) return '<div class="tr-title">פרק 3 · ראש העין</div><div class="tr-obj">דברו עם <b>' + MEN + '</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
       if (q('ptS').status === 'idle') return '<div class="tr-title">' + TITLES.ptS + '</div><div class="tr-obj">ר׳ יואל מחכה בכיכר. ' + MEN + ' יודע איפה.</div>';
-      return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">' + (done('ptS') ? 'גם ר׳ יואל חזר לבית הכנסת. ' : '') + 'פתח תקווה מכירה את השליח. המשך יבוא...</div>';
+      return '<div class="tr-title done">✓ פרק 2 הושלם!</div><div class="tr-obj">' + (done('ptS') ? 'גם ר׳ יואל חזר לבית הכנסת. ' : '') + 'פרק 3 מחכה: ר׳ שלום בראש העין. סעו בטנק ליציאה מזרחה — היא מסומנת במפה 🚐</div>';
     }
 
     // ================= עדכון =================
@@ -800,6 +809,7 @@
         const nx = nextQuest();
         // את הפגישה הראשונה עושים פנים אל פנים, ליד בית חב״ד
         if (nx === 'pt1' && !S().flags.ptMet) return null;
+        if (!nx && rhPending()) return { id: 'rh', nodes: RH_OFFER() };
         if (!nx && pesachDone() && q('ptS').status === 'locked') return { id: 'ptS', nodes: SECRET_OFFER() };
         return nx && available(nx) ? { id: nx, nodes: OFFER[nx]() } : null;
       },

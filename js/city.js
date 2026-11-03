@@ -7,7 +7,7 @@
   G.buildCity = function (scene, D) {
     const rnd = G.rng(5150);
     const W = {
-      city: true, noFade: true, HALF: D.half || 640, mapExtent: (D.half || 640) + 60, cityId: D.id || 'hod', cityName: D.name || 'הוד השרון', cityEn: D.id === 'pt' ? 'Petah Tikva' : 'Hod HaSharon',
+      city: true, noFade: true, HALF: D.half || 640, mapExtent: (D.half || 640) + 60, cityId: D.id || 'hod', cityName: D.name || 'הוד השרון', cityEn: { pt: 'Petah Tikva', rh: 'Rosh HaAyin' }[D.id] || 'Hod HaSharon',
       buildings: [], litSigns: [], placeLights: {}, places: [], spots: {}, paths: [], mapDirty: false,
     };
     const lam = (c, e) => new T.MeshLambertMaterial(Object.assign({ color: c }, e || {}));
@@ -1272,7 +1272,187 @@
       return chB;
     }
 
-    // מקומות הסיפור: לכל עיר משלה (הוד השרון — פרק 1, פתח תקווה — פרק 2)
+    // ================= ראש העין (פרק 3) =================
+    // בית חב״ד במרכז הוותיק, ליד שכונת הרמב״ם — אפשר ללכת ממנו ברגל לבתי הכנסת ולפארק לב העיר
+    function storyRH() {
+      const chB = buildingNear(-1420, -330, (b) => b.area > 90 && b.area < 600 && b.levels <= 3 && !b.name);
+      const CH = frontOf(chB);
+      W.chabadFrame = CH;
+      const chG = grp(CH);
+      put(new T.Mesh(new T.PlaneGeometry(1.7, 2.5), lam(0xffd23f)), 0, 1.25, 0.04, chG);
+      put(new T.Mesh(new T.PlaneGeometry(1.3, 2.2), lam(0x6b3e1f)), 0, 1.1, 0.05, chG);
+      boxMesh(2.2, 0.15, 0.6, lam(0x9a9a9a), 0, 0.075, 0.32, chG);
+      sign('בית חב״ד ראש העין', 4.2, 0.75, 0, 2.95, 0.06, { w: 144, h: 26, size: 15, bg: '#1b3a8a', fg: '#ffffff', border: '#ffd23f', lit: true }, chG);
+      const fw = Math.min(CH.w / 2 - 0.4, 5);
+      makeLights([-fw, 3.6, 0.2], [fw, 3.6, 0.2], 12, chG);
+      W.places.chabadDoor = spot(CH, 0, 0.7);
+      SP.moshe = spot(CH, -1.3, 1.4);
+      SP.playerStart = spot(CH, 0.3, 2.3);
+      SP.crate = spot(CH, -2.9, 2.6);
+      SP.kitchen = spot(CH, 2.4, 0.9);
+      SP.vanStart = roadSpot(CH.road);
+      SP.chabadFront = spot(CH, 0, 5);
+      {
+        const r = CH.road, w = r.seg.w;
+        let nx = -r.dz, nz = r.dx;
+        if (nx * (CH.x - r.x) + nz * (CH.z - r.z) < 0) {
+          nx = -nx;
+          nz = -nz;
+        }
+        const side = (along, off) => ({ x: r.x + r.dx * along + nx * off, z: r.z + r.dz * along + nz * off, h: Math.atan2(r.dx, r.dz) });
+        SP.rides = [
+          Object.assign({ type: 'scooter', id: 'scooter1' }, side(5, w / 2 + 1.3)),
+          Object.assign({ type: 'bike', id: 'bike1' }, side(6.3, w / 2 + 1.3)),
+          Object.assign({ type: 'car', id: 'car1' }, side(-8, Math.min(w / 4, 1.6))),
+        ];
+      }
+      placeName('בית חב״ד ראש העין', 'Chabad Rosh HaAyin', CH.x, CH.z, 10);
+      W.setChabadLevel = function () {};
+      W.dormTable = null;
+
+      // ---------- בית הכנסת ״שם ועבר״ בשכונת הרמב״ם — סבא סעדיה ומנחה ----------
+      {
+        const p = poi(/שם ועבר/) || { x: -1647, z: -644 };
+        const SB = frontOf(buildingNear(p.x, p.z, (b) => b.area > 40));
+        const sG = grp(SB);
+        sign('בית כנסת שם ועבר', 4, 0.75, 0, 3.2, 0.06, { w: 128, h: 24, size: 15, bg: '#e9e4d8', fg: '#1b3a8a', border: '#1b3a8a' }, sG);
+        W.placeLights.shemVaever = makeLights([-2.4, 3.6, 0.2], [2.4, 3.6, 0.2], 10, sG);
+        W.placeLights.shemVaever.visible = false;
+        SP.saadiaShul = SB;
+        SP.saadiaDoor = spot(SB, 0, 1.0);
+        SP.saadia = spot(SB, -1.8, 1.6);
+        SP.zoneSaadia = roadSpot(SB.road, 9);
+        placeName('בית כנסת שם ועבר', 'Shem VaEver Synagogue', SB.x, SB.z, 12);
+      }
+      // ---------- בית הכנסת ״אמת ושלום״ — עשרת הדברות בשבועות ----------
+      {
+        const p = poi(/אמת ושלום/) || { x: -1557, z: -629 };
+        const EB = frontOf(buildingNear(p.x, p.z, (b) => b.area > 40));
+        const eG = grp(EB);
+        sign('בית כנסת אמת ושלום', 4, 0.75, 0, 3.2, 0.06, { w: 128, h: 24, size: 15, bg: '#e9e4d8', fg: '#1b3a8a', border: '#1b3a8a' }, eG);
+        W.placeLights.emetShul = makeLights([-2.4, 3.6, 0.2], [2.4, 3.6, 0.2], 10, eG);
+        W.placeLights.emetShul.visible = false;
+        SP.emetShul = EB;
+        SP.emetDoor = spot(EB, 0, 1.0);
+        placeName('בית כנסת אמת ושלום', 'Emet VeShalom Synagogue', EB.x, EB.z, 12);
+      }
+      // ---------- שכונת הרמב״ם: מורי יחיא, הסופר הוותיק ----------
+      {
+        const RB = frontOf(buildingNear(-1600, -560, (b) => b.area > 50 && b.area < 400 && !b.name));
+        const yG = grp(RB);
+        sign('מורי יחיא · סת״ם', 3, 0.6, 0, 2.6, 0.06, { w: 112, h: 22, size: 14, bg: '#f7ecc8', fg: '#5a3a12', border: '#8b5a2b' }, yG);
+        boxMesh(1.2, 0.75, 0.7, lam(0x8b5a2b), 1.3, 0.38, 1.0, yG);
+        SP.yahya = spot(RB, -0.6, 1.4);
+        SP.zoneYahya = roadSpot(RB.road, 8);
+        placeName('שכונת הרמב״ם', 'Rambam Quarter', RB.x, RB.z, 40);
+      }
+      // ---------- פארק לב העיר: מדורת ל״ג בעומר ----------
+      {
+        const pa = areaBy(/לב העיר/);
+        const [cx, cz] = pa ? centroidOf(pa.p) : [-1088, -376];
+        let bx = cx, bz = cz;
+        for (let k = 0; k < 20 && !isFree(bx, bz, 3); k++) bx += 2;
+        SP.bonfire = { x: bx, z: bz };
+        placeName('פארק לב העיר', 'Lev HaIr Park', cx, cz, 30);
+      }
+      // ---------- מקומות נוספים בעיר ----------
+      // [שם במפה, עברית, אנגלית, מיקום משוער] — כשיש כמה התאמות (למשל שני ״שוק ראש העין״) לוקחים את הקרובה למיקום המשוער
+      const named = [
+        [/^שוק ראש העין$/, 'שוק ראש העין', 'Rosh HaAyin Market', -1377, -16],
+        [/היכל התרבות/, 'היכל התרבות', 'Culture Hall', -1109, -306],
+        [/סקייטפארק/, 'סקייטפארק', 'Skatepark', 1047, 239],
+        [/מרכז קהילתי אביב/, 'מרכז קהילתי אביב', 'Aviv Community Center', -725, -207],
+        [/G\. Afek Mall/, 'קניון G אפק', 'G Afek Mall', 1413, 127],
+        [/אגם ראש העין/, 'אגם ראש העין', 'Rosh HaAyin Lake', 563, -681],
+        [/מגדל אפק/, 'מגדל אפק', 'Migdal Afek', -121, 1514],
+        [/עיריית ראש העין/, 'עיריית ראש העין', 'City Hall', -195, 136],
+      ];
+      const xzOf = (p) => (p.p ? centroidOf(p.p) : p.cx !== undefined ? [p.cx, p.cz] : [p.x, p.z]);
+      SP.rhPlaces = {};
+      for (const [re, he, en, hx, hz] of named) {
+        let best = null, bd = 1e9;
+        for (const p of [...pois, ...B, ...areaPolys]) {
+          const n = p.n || p.name;
+          if (!n || !re.test(n)) continue;
+          const [x, z] = xzOf(p);
+          const d = Math.hypot(x - hx, z - hz);
+          if (d < bd) {
+            bd = d;
+            best = [x, z];
+          }
+        }
+        if (!best) continue;
+        SP.rhPlaces[he] = { x: best[0], z: best[1] };
+        placeName(he, en, best[0], best[1], 20);
+      }
+      // נקודה על המדרכה ליד מקום (בצד של המקום, לא על הכביש)
+      const curbSpot = (x, z, anyRoad) => {
+        const r = nearestRoad(x, z, 160, anyRoad ? null : (o) => o.rd.t !== 'service');
+        if (!r) return null;
+        let nx = -r.dz, nz = r.dx;
+        if (nx * (x - r.x) + nz * (z - r.z) < 0) {
+          nx = -nx;
+          nz = -nz;
+        }
+        let off = r.seg.w / 2 + 2.2, sx = r.x + nx * off, sz = r.z + nz * off;
+        for (let k = 0; k < 6 && !isFree(sx, sz, 1.2); k++) {
+          off += 0.8;
+          sx = r.x + nx * off;
+          sz = r.z + nz * off;
+        }
+        return { x: sx, z: sz, rot: Math.atan2(-nx, -nz), road: roadSpot(r, 9) };
+      };
+      const streetOf = (F) => (F.road && F.road.seg && F.road.seg.rd.name) || null;
+      // ---------- ״מזוזה לכל דירה״: ארבעה בניינים חדשים, במרחקים שונים מהרמב״ם ----------
+      SP.mezBldgs = [];
+      for (const [x, z] of [[-1000, -560], [-300, 700], [390, 1170], [1220, 100]]) {
+        const b = buildingNear(x, z, (b) => b.area > 250 && b.area < 3000);
+        if (!b) continue;
+        const F = frontOf(b);
+        SP.mezBldgs.push({ door: spot(F, 0, 1.1), crowd: spot(F, 0, 4), zone: roadSpot(F.road, 9), street: streetOf(F), x: F.x, z: F.z });
+      }
+      // ---------- ״סבא סעדיה מספר״: שלוש נקודות איסוף ----------
+      SP.saadiaPickups = [];
+      for (const [he, fx, fz] of [['מרכז קהילתי אביב', -725, -207], ['שוק ראש העין', -1377, -16], ['סקייטפארק', 1047, 239]]) {
+        const p = SP.rhPlaces[he] || { x: fx, z: fz };
+        const c = curbSpot(p.x, p.z);
+        if (c) SP.saadiaPickups.push(Object.assign(c, { name: he }));
+      }
+      // ---------- שבועות: ארבע משפחות בבתים קרובים לבית הכנסת ״אמת ושלום״ ----------
+      SP.shavuotHomes = [];
+      {
+        const e = SP.emetDoor;
+        for (const [dx, dz] of [[150, -90], [-130, 120], [120, 160], [-170, -110]]) {
+          const b = buildingNear(e.x + dx, e.z + dz, (b) => b.area > 60 && b.area < 600 && !b.name);
+          if (!b) continue;
+          const F = frontOf(b);
+          SP.shavuotHomes.push(spot(F, 0, 2.2));
+        }
+      }
+      // ---------- מגדל אפק: הספסל של ״השומר״ ----------
+      {
+        const p = SP.rhPlaces['מגדל אפק'] || { x: -121, z: 1514 };
+        // הדרך הקרובה ביותר לחורבות (גם דרך שירות) — שהטנק יוכל להגיע
+        SP.afek = curbSpot(p.x, p.z, true);
+        SP.afekRuin = { x: p.x, z: p.z };
+      }
+      for (const [k, p] of [['scooter', SP.zoneSaadia], ['bike', SP.zoneYahya]]) {
+        if (!p) continue;
+        const r = nearestRoad(p.x, p.z, 80);
+        if (!r) continue;
+        const nx = -r.dz, nz = r.dx;
+        for (const s of [1, -1]) {
+          const x = r.x + nx * s * (r.seg.w / 2 + 1.3) + r.dx * 4, z = r.z + nz * s * (r.seg.w / 2 + 1.3) + r.dz * 4;
+          if (isFree(x, z, 0.8)) {
+            SP.rides.push({ type: k, id: k + SP.rides.length, x, z, h: Math.atan2(r.dx, r.dz) });
+            break;
+          }
+        }
+      }
+      return chB;
+    }
+
+    // מקומות הסיפור: לכל עיר משלה (הוד השרון — פרק 1, פתח תקווה — פרק 2, ראש העין — פרק 3)
     function storyHod() {
       // ================= בית חב״ד =================
       const chB = buildingNear(285, -175, (b) => b.area > 90 && b.area < 450 && b.levels <= 3 && !b.name && !b.gable);
@@ -1676,7 +1856,7 @@
       }
       return chB;
     }
-    const chB = W.cityId === 'pt' ? storyPT() : storyHod();
+    const chB = W.cityId === 'pt' ? storyPT() : W.cityId === 'rh' ? storyRH() : storyHod();
     // בית חב״ד נשאר בטיח ובלי מעקה: בשדרוגים נוספת עליו קומה
     chB.stone = false;
     chB.noParapet = true;

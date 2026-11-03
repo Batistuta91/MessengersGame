@@ -828,7 +828,7 @@
       b: {
         s: 'npc', t: 'תיסע אליו עם הטנק? פה בהוד השרון הכול מסודר. סמנתי לך במפה את היציאה מהעיר לכיוון פתח תקווה — ותמיד אפשר לחזור באותה דרך.',
         c: [
-          { t: 'יוצא לפתח תקווה!', fx: () => { S().flags.ptUnlocked = true; api.goCity(); } },
+          { t: 'יוצא לפתח תקווה!', fx: () => { S().flags.ptUnlocked = true; api.goCity('pt'); } },
           { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.ptUnlocked = true; api.toast('היציאה לפתח תקווה מסומנת במפה (' + (isTouch ? 'כפתור המפה' : 'M') + ')', 'gold'); } },
         ],
       },
@@ -840,7 +840,7 @@
       if (!done('m4') || (a && a !== 'secret')) return d;
       if (!S().flags.ptUnlocked) return PT_OFFER();
       if (d.a.go) return d;
-      d.a.c = (d.a.c || [{ t: 'עוד קצת פה' }]).concat({ t: '🚐 נוסעים לפתח תקווה', fx: () => api.goCity() });
+      d.a.c = (d.a.c || [{ t: 'עוד קצת פה' }]).concat({ t: '🚐 נוסעים לפתח תקווה', fx: () => api.goCity('pt') });
       return d;
     }
     function mosheLines() {

@@ -270,23 +270,34 @@
   }
   // ---------- העיר הנוכחית: כל עיר זוכרת את המיקומים שלה ----------
   const CITY = W.cityId || 'hod';
-  const OTHER_CITY = CITY === 'pt' ? 'hod' : 'pt';
-  // ---------- היציאה מהעיר: כביש ראשי בקצה המפה, בכיוון העיר השנייה (x מזרחה, z דרומה; פתח תקווה מדרום להוד השרון) ----------
-  const EXIT = (function () {
+  // ---------- הערים והדרכים ביניהן: הוד השרון ↔ פתח תקווה ↔ ראש העין ----------
+  const CITY_NAMES = { hod: 'הוד השרון', pt: 'פתח תקווה', rh: 'ראש העין' };
+  const CITY_EN = { hod: 'Hod HaSharon', pt: 'Petah Tikva', rh: 'Rosh HaAyin' };
+  // מרכזי המפות (קו רוחב/אורך) — לכיוון היציאה מכל עיר לשכנה שלה
+  const CITY_LL = { hod: [32.155, 34.89], pt: [32.08512, 34.8889], rh: [32.09459, 34.95836] };
+  const NEIGHBORS = { hod: ['pt'], pt: ['hod', 'rh'], rh: ['pt'] };
+  // היציאה מהעיר: כביש ראשי בכיוון העיר השכנה (x מזרחה, z דרומה)
+  function findExit(to) {
     if (!W.city || !W.nearestRoad) return null;
-    const L = Math.hypot(0.15, 1), ux = (CITY === 'pt' ? 0.15 : -0.15) / L, uz = (CITY === 'pt' ? -1 : 1) / L;
+    const a = CITY_LL[CITY], b = CITY_LL[to];
+    let ux = (b[1] - a[1]) * Math.cos((a[0] * Math.PI) / 180), uz = -(b[0] - a[0]);
+    const L = Math.hypot(ux, uz) || 1;
+    ux /= L;
+    uz /= L;
     for (const pred of [(o) => o.cls === 'major', (o) => o.rd.t !== 'service']) {
-      // במפה גדולה (פתח תקווה) לא בקצה ממש — שהנסיעה לא תהיה ארוכה מדי
+      // במפה גדולה לא בקצה ממש — שהנסיעה לא תהיה ארוכה מדי
       for (let d = Math.min(W.HALF - 45, 900); d > 150; d -= 25) {
         const r = W.nearestRoad(ux * d, uz * d, 128, pred);
         if (!r || Math.max(Math.abs(r.x), Math.abs(r.z)) > W.HALF - 32) continue;
         // כיוון הנסיעה פנימה, לאורך הכביש
         const s = r.dx * -ux + r.dz * -uz < 0 ? -1 : 1;
-        return { x: r.x, z: r.z, h: Math.atan2(r.dx * s, r.dz * s), nx: -r.dz, nz: r.dx, w: r.seg ? r.seg.w : 8 };
+        return { to, x: r.x, z: r.z, h: Math.atan2(r.dx * s, r.dz * s), nx: -r.dz, nz: r.dx, w: r.seg ? r.seg.w : 8 };
       }
     }
     return null;
-  })();
+  }
+  const EXITS = (NEIGHBORS[CITY] || []).map(findExit).filter(Boolean);
+  const exitTo = (to) => EXITS.find((e) => e.to === to) || null;
   S.cities = S.cities || {};
   if ((S.posCity || 'hod') !== CITY) {
     const c = S.cities[CITY], f = freshState();
@@ -296,13 +307,14 @@
     S.inVan = false;
     S.ride = null;
     // הגעתם בכביש: הטנק נכנס לעיר מהיציאה שמול העיר הקודמת
-    if (S.flags.roadIn === CITY && EXIT) {
-      S.van = { x: EXIT.x, z: EXIT.z, h: EXIT.h };
-      S.player = { x: EXIT.x, z: EXIT.z, rot: EXIT.h };
+    const ex = S.flags.roadIn === CITY && exitTo(S.flags.roadFrom);
+    if (ex) {
+      S.van = { x: ex.x, z: ex.z, h: ex.h };
+      S.player = { x: ex.x, z: ex.z, rot: ex.h };
       S.inVan = true;
     }
   }
-  S.flags.roadIn = null;
+  S.flags.roadIn = S.flags.roadFrom = null;
   S.posCity = CITY;
   S.city = CITY;
   let resetting = false;
@@ -483,12 +495,21 @@
   // בפתח תקווה: במקום משה — ר׳ מנחם, השליח של העיר; דמויות פרק 1 נשארות בהוד השרון
   // מראה שונה לגמרי מהשליח (הדמות הראשית): מבוגר ומלא, זקן מלח ופלפל, כיפה שחורה ומשקפיים, חליפה כחולה כהה
   if (CITY === 'pt') Object.assign(NPC_DEFS[0], { name: 'ר׳ מנחם', role: 'השליח של פתח תקווה', look: { shirt: 0xffffff, jacket: 0x1f2f55, pants: 0x1f2f55, skin: 0xe2b088, kippah: 0x0d0d0d, kippahPlain: true, hair: 0x8a8782, beard: 0x9a9792, glasses: true, tzitzit: true, suitGlow: 0x060b1a, scale: 1.0 } });
+  // בראש העין: ר׳ שלום — שליח צעיר ממשפחה תימנית ותיקה בעיר; זקן שחור, כובע, בלי חליפה
+  if (CITY === 'rh') Object.assign(NPC_DEFS[0], { name: 'ר׳ שלום', role: 'השליח של ראש העין', look: { shirt: 0xffffff, pants: 0x1a1a1a, skin: 0xc98e62, hat: 'fedora', hair: 0x141414, beard: 0x1a1a1a, tzitzit: true, scale: 0.98 } });
   for (const d of NPC_DEFS) {
     const sp = SPOT[d.id];
     if (sp) Object.assign(d, { x: sp.x, z: sp.z, rot: sp.rot || 0 });
     addNPC(d);
   }
-  if (CITY === 'pt') for (const id of TARGET_IDS) npcById[id].hidden = true;
+  if (CITY !== 'hod') for (const id of TARGET_IDS) npcById[id].hidden = true;
+  // מסך הפתיחה בפרק 3
+  if (CITY === 'rh') {
+    const tc = document.querySelector('#title .credit'), tl = document.querySelector('#title .tagline'), bd = document.querySelector('#title .badge');
+    if (bd) bd.textContent = 'פרק 3 · ראש העין';
+    if (tl) tl.textContent = 'עיר אחת, שני חלקים: מזוזות לדירות החדשות, הסיפור של סבא סעדיה, תהלוכת ל״ג בעומר — ועשרת הדברות בשבועות.';
+    if (tc) tc.textContent = 'ראש העין · נתוני מפה: © OpenStreetMap contributors (ODbL)';
+  }
   // מסך הפתיחה בפרק 2
   if (CITY === 'pt') {
     const tc = document.querySelector('#title .credit'), tl = document.querySelector('#title .tagline'), bd = document.querySelector('#title .badge');
@@ -1005,7 +1026,8 @@
       len = 1;
     }
     const sprint = keys.ShiftLeft || keys.ShiftRight || (isTouch && joy.mag > 0.95);
-    const sp = (sprint ? 9.5 : 6) * len;
+    // בתהלוכה הולכים בקצב של הילדים (M.walkMax)
+    const sp = Math.min((sprint ? 9.5 : 6) * len, (M && M.walkMax && M.walkMax()) || 99);
     player.spd = sp;
     // קפיצה (רווח)
     if (keys.Space && player.jy <= 0 && player.vy <= 0) {
@@ -1163,6 +1185,9 @@
   }
 
   function enterVehicle(v) {
+    // משימה ברגל (למשל חג): לא עולים על כלי רכב
+    const no = M && M.noVehicles && M.noVehicles();
+    if (no) return toast(no);
     drv = v;
     S.inVan = v === van;
     S.ride = v.id;
@@ -1373,7 +1398,7 @@
       mode = 'matzah';
       MZ.open();
     } else if (cur.kind === 'door') {
-      if (CITY === 'pt') toast('בית חב״ד פתח תקווה — ר׳ מנחם מארח אתכם כאן 💙');
+      if (CITY !== 'hod') toast('בית חב״ד ' + CITY_NAMES[CITY] + ' — ' + npcById.moshe.def.name + ' מארח אתכם כאן 💙');
       else openPanel();
     }
     else if (cur.kind === 'walker') {
@@ -1421,7 +1446,7 @@
   };
 
   function dlgMoshe() {
-    if (CITY === 'pt') return M.mosheDialog();
+    if (CITY !== 'hod') return M.mosheDialog();
     const m = S.mission;
     if (m.status === 'idle')
       return {
@@ -1906,6 +1931,14 @@
       h += row('✦ ״הנכד של המייסדים״', stOf('ptS'), true);
       h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li></ul>';
     }
+    h += '<h3 class="jr-h">פרק 3 · ראש העין</h3>';
+    if (!cityOpen('rh')) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את פתח תקווה</p>';
+    else {
+      h += '<ul class="jr-list">';
+      h += row('משימה 1 · ״מזוזה לכל דירה״', stOf('rh1') === 'locked' ? 'idle' : stOf('rh1')) + row('משימה 2 · ״סבא סעדיה מספר״', stOf('rh2')) + row('משימה 3 · ״תהלוכת ל״ג בעומר״', stOf('rh3')) + row('משימה 4 · ״עשרת הדברות בשבועות״', stOf('rh4'));
+      h += row('✦ ״השומר במגדל אפק״', stOf('rhS'), true);
+      h += '<li><span>📜 דפי תניא</span><em>' + pages('rh', 18) + '</em></li></ul>';
+    }
     return h;
   }
   function openJournal() {
@@ -1937,8 +1970,10 @@
   }
   function pauseGame() {
     if (G.voice) G.voice.stop();
-    $('p-travel').textContent = '🧭 ניווט ל' + CITY_NAMES[OTHER_CITY];
-    show($('p-travel'), ptOpen());
+    fillTravelBtns($('p-travels'), '🧭 ניווט ל', (to) => {
+      resumeGame();
+      goCity(to);
+    });
     mode = 'paused';
     refreshSettingsLabels();
     show($('pause'), true);
@@ -2072,7 +2107,7 @@
     if (S.flags.justTraveled) {
       const to = S.flags.justTraveled;
       S.flags.justTraveled = null;
-      setTimeout(() => toast(to === 'pt' ? '🚐 ברוכים הבאים לפתח תקווה! ר׳ מנחם מחכה ליד בית חב״ד' : '🚐 חזרתם להוד השרון — משה שמח לראות אתכם', 'gold'), 800);
+      setTimeout(() => toast({ pt: '🚐 ברוכים הבאים לפתח תקווה! ר׳ מנחם מחכה ליד בית חב״ד', rh: '🚐 ברוכים הבאים לראש העין! ר׳ שלום מחכה ליד בית חב״ד', hod: '🚐 חזרתם להוד השרון — משה שמח לראות אתכם' }[to], 'gold'), 800);
     }
     show(ui.title, false);
     show(ui.hud, true);
@@ -2097,13 +2132,13 @@
   W.setChabadLevel(S.chabadLevel);
   for (const id of TARGET_IDS) if (S.mission.targets[id] === 'accepted' && W.placeLights[id]) W.placeLights[id].visible = true;
   if (S.mission.status === 'complete') spawnExtraWalkers();
-  if (S.mission.status === 'complete' && !S.flags.resultsSeen && CITY !== 'pt') pendingResults = true;
+  if (S.mission.status === 'complete' && !S.flags.resultsSeen && CITY === 'hod') pendingResults = true;
   player.p.group.visible = !drv || !drv.P.hide;
   if (drv) {
     player.x = drv.x;
     player.z = drv.z;
   }
-  M = (CITY === 'pt' && G.makeMissionsPT ? G.makeMissionsPT : G.makeMissions)({
+  M = ((CITY === 'pt' && G.makeMissionsPT) || (CITY === 'rh' && G.makeMissionsRH) || G.makeMissions)({
     get S() { return S; },
     get mode() { return mode; },
     scene, W, A, player, van, npcs, npcById, walkers, camTarget, isTouch, ACT,
@@ -2111,7 +2146,7 @@
     say: (n) => talkTo(n),
     results: queueResults,
     travel: (c) => travel(c),
-    goCity: () => goCity(),
+    goCity: (to) => goCity(to),
     events: () => EV,
     get drv() { return drv; },
     setRadio(i) {
@@ -2319,12 +2354,12 @@
     if (n.evIcon !== undefined) return n.evIcon;
     const m = S.mission;
     if (n.id === 'moshe') {
-      if (CITY === 'pt') return M.mosheIcon();
+      if (CITY !== 'hod') return M.mosheIcon();
       if (m.status === 'idle') return 'mission';
       if (m.status === 'active') return 'hint';
       return S.chabadLevel < 2 ? 'star' : M.mosheIcon();
     }
-    if (m.status !== 'active' || CITY === 'pt' || !(n.id in m.targets)) return M.iconFor(n);
+    if (m.status !== 'active' || CITY !== 'hod' || !(n.id in m.targets)) return M.iconFor(n);
     const o = m.targets[n.id];
     if (o === 'accepted') return 'ok';
     if (o === 'declined') return null;
@@ -2333,7 +2368,7 @@
     return 'alert';
   }
   function trackerHTML() {
-    if (CITY === 'pt') return M.trackerHTML();
+    if (CITY !== 'hod') return M.trackerHTML();
     const m = S.mission;
     let h = '<div class="tr-title">משימה 1 · ״רק חמש דקות״</div>';
     if (m.status === 'idle') return h + '<div class="tr-obj">דברו עם <b>משה</b> ליד בית חב״ד <span class="ic blue">!</span></div>';
@@ -2559,7 +2594,7 @@
     if (gps.dest === 'home') return W.places.chabadDoor;
     if (gps.dest === 'point') return gps.point;
     if (gps.dest === 'tank') return van;
-    if (gps.dest === 'exit') return EXIT;
+    if (gps.dest === 'exit') return gps.exit;
     return nearestPending();
   }
   function refreshGpsBtns() {
@@ -2618,8 +2653,10 @@
     if (!W.drawMap || (mode !== 'play' && mode !== 'paused')) return;
     if (mode === 'paused') show($('pause'), false);
     mode = 'map';
-    $('bm-travel').textContent = '🧭 ל' + CITY_NAMES[OTHER_CITY];
-    show($('bm-travel'), ptOpen());
+    fillTravelBtns($('bm-travels'), '🧭 ל', (to) => {
+      goCity(to);
+      drawBigMap();
+    });
     show(bm, true);
     A.click();
     if (!bmImg) {
@@ -2717,14 +2754,14 @@
     if (ch) bmMarker(ch.x, ch.z, '🏠', '#3b6fd8', 16);
     if (drv !== van) bmMarker(van.x, van.z, '🚐', '#ffd23f', 15);
     if (gps.dest === 'point' && gps.point) bmMarker(gps.point.x, gps.point.z, '📍', '#ffffff', 16);
-    if (EXIT && ptOpen()) {
-      bmMarker(EXIT.x, EXIT.z, '🚐', '#0d7a3e', 17);
-      const [ex, ez] = w2s(EXIT.x, EXIT.z);
+    for (const e of openExits()) {
+      bmMarker(e.x, e.z, '🚐', '#0d7a3e', 17);
+      const [ex, ez] = w2s(e.x, e.z);
       bmx.lineWidth = 4;
       bmx.strokeStyle = 'rgba(19,33,63,0.85)';
-      bmx.strokeText('יציאה ל' + CITY_NAMES[OTHER_CITY], ex, ez - 30);
+      bmx.strokeText('יציאה ל' + CITY_NAMES[e.to], ex, ez - 30);
       bmx.fillStyle = '#ffd23f';
-      bmx.fillText('יציאה ל' + CITY_NAMES[OTHER_CITY], ex, ez - 30);
+      bmx.fillText('יציאה ל' + CITY_NAMES[e.to], ex, ez - 30);
     }
     const p = bmPos(), [px, pz] = w2s(p.x, p.z);
     const hd = drv ? drv.h : player.rot, R = Wd > 1600 ? 18 : 13;
@@ -2838,7 +2875,9 @@
     if (m.status !== 'active') {
       let t = M.navTarget() || (EV && EV.navTarget());
       // סיימתם את הוד השרון ועוד לא הייתם בפתח תקווה: הקו מוביל ליציאה מהעיר
-      if (!t && EXIT && CITY === 'hod' && ptOpen() && !S.flags.ptVisited && !S.cities.pt && !M.activeQuest()) t = EXIT;
+      if (!t && CITY === 'hod' && ptOpen() && !S.flags.ptVisited && !S.cities.pt && !M.activeQuest()) t = exitTo('pt');
+      // ואחרי פסח בפתח תקווה — לראש העין
+      if (!t && CITY === 'pt' && cityOpen('rh') && !S.flags.rhVisited && !S.cities.rh && !M.activeQuest()) t = exitTo('rh');
       return t && Math.hypot(t.x - player.x, t.z - player.z) > 5 ? t : null;
     }
     let best = null, bd = 1e9;
@@ -2858,10 +2897,10 @@
   let call = null, callWait = 0;
   const MOSHE_PHONE = { id: 'moshe', name: 'משה', role: 'בטלפון 📞' };
   function callReason() {
-    if ((S.mission.status !== 'complete' && CITY !== 'pt') || M.activeQuest()) return null;
+    if ((S.mission.status !== 'complete' && CITY === 'hod') || M.activeQuest()) return null;
     const off = M.callOffer && M.callOffer();
     if (off && !S.flags['call_' + off.id]) return off;
-    if (CITY !== 'pt' && S.chabadLevel === 1 && !S.flags.call_up) return { id: 'up' };
+    if (CITY === 'hod' && S.chabadLevel === 1 && !S.flags.call_up) return { id: 'up' };
     return null;
   }
   function updateCall(dt) {
@@ -2917,36 +2956,45 @@
   }
 
   // ================= נסיעה בין ערים =================
-  const CITY_NAMES = { hod: 'הוד השרון', pt: 'פתח תקווה' };
-  // פתח תקווה נפתחת כשמסיימים את ״האור הגדול״ — דפי תניא ור׳ זלמן לא חוסמים
-  function ptOpen() {
-    return !!S.flags.ptUnlocked || CITY === 'pt' || !!(S.quests && S.quests.m4 && S.quests.m4.status === 'complete');
+  // פתח תקווה נפתחת כשמסיימים את ״האור הגדול״ — דפי תניא ור׳ זלמן לא חוסמים.
+  // ראש העין נפתחת אחרי הסדר המשותף בפתח תקווה (סוף פרק 2)
+  const qDone = (id) => !!(S.quests && S.quests[id] && S.quests[id].status === 'complete');
+  function cityOpen(c) {
+    if (c === CITY || c === 'hod') return true;
+    if (c === 'pt') return !!S.flags.ptUnlocked || qDone('m4');
+    if (c === 'rh') return !!S.flags.rhUnlocked || qDone('pesach');
+    return false;
   }
+  const ptOpen = () => cityOpen('pt');
+  const openExits = () => EXITS.filter((e) => cityOpen(e.to));
   // משימה סודית (בלי שעון) לא חוסמת נסיעה; היא נשמרת וממשיכה כשחוזרים
   const travelBlocked = () => {
     const aq = M.activeQuest();
-    return !!aq && aq !== 'secret' && aq !== 'ptS';
+    return !!aq && aq !== 'secret' && aq !== 'ptS' && aq !== 'rhS';
   };
-  // נוסעים לעיר השנייה בטנק: ה-GPS מסמן את היציאה מהעיר, ושם עוברים
-  function goCity() {
+  // נוסעים לעיר אחרת בטנק: ה-GPS מסמן את היציאה מהעיר, ושם עוברים
+  function goCity(to) {
     if (travelBlocked()) return toast('קודם לסיים את המשימה שבאמצע');
-    if (!EXIT) return travel(OTHER_CITY);
+    to = to || (openExits()[0] || {}).to;
+    if (!to) return;
+    const ex = exitTo(to);
+    if (!ex) return travel(to);
     gps.dest = 'exit';
+    gps.exit = ex;
     gps.t = 0;
     refreshGpsBtns();
     updateGps(0.01);
     A.click();
-    toast('🚐 ' + (drv === van ? 'סעו' : 'עלו על טנק המבצעים וסעו') + ' ליציאה מהעיר, ל' + CITY_NAMES[OTHER_CITY] + ' — עקבו אחרי הקו הצהוב', 'gold');
+    toast('🚐 ' + (drv === van ? 'סעו' : 'עלו על טנק המבצעים וסעו') + ' ליציאה מהעיר, ל' + CITY_NAMES[to] + ' — עקבו אחרי הקו הצהוב', 'gold');
   }
-  // שלט ירוק וטבעת זוהרת ביציאה מהעיר (רק כשהעיר השנייה פתוחה)
-  let exitMark = null, exitArmed = false, exitTipT = 0;
-  if (EXIT) {
-    exitMark = new T.Group();
+  // שלט ירוק וטבעת זוהרת בכל יציאה מהעיר (רק כשהעיר השכנה פתוחה)
+  let exitArmed = false, exitTipT = 0;
+  for (const ex of EXITS) {
+    const mark = new T.Group();
     const ring = new T.Mesh(new T.RingGeometry(5, 6.2, 40), new T.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.75, side: T.DoubleSide, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(EXIT.x, 0.08, EXIT.z);
-    exitMark.add(ring);
-    exitMark.userData.ring = ring;
+    ring.position.set(ex.x, 0.08, ex.z);
+    mark.add(ring);
     const cv = document.createElement('canvas');
     cv.width = 512;
     cv.height = 256;
@@ -2960,55 +3008,66 @@
     cx.textAlign = 'center';
     cx.textBaseline = 'middle';
     cx.font = '900 76px Rubik, Arial, sans-serif';
-    cx.fillText(CITY_NAMES[OTHER_CITY], 256, 100);
+    cx.fillText(CITY_NAMES[ex.to], 256, 100);
     cx.font = '500 40px Arial, sans-serif';
-    cx.fillText(OTHER_CITY === 'pt' ? 'Petah Tikva' : 'Hod HaSharon', 256, 185);
+    cx.fillText(CITY_EN[ex.to], 256, 185);
     const tex = new T.CanvasTexture(cv);
-    const off = EXIT.w / 2 + 2.2, sx = EXIT.x + EXIT.nx * off, sz = EXIT.z + EXIT.nz * off;
+    const off = ex.w / 2 + 2.2, sx = ex.x + ex.nx * off, sz = ex.z + ex.nz * off;
     // שני צדדים, כדי שהכיתוב לא ייראה הפוך מאחור
     for (const back of [0, 1]) {
       const board = new T.Mesh(new T.PlaneGeometry(4.4, 2.2), new T.MeshBasicMaterial({ map: tex }));
       board.position.set(sx, 4.6, sz);
-      board.rotation.y = EXIT.h + (back ? Math.PI : 0);
-      exitMark.add(board);
+      board.rotation.y = ex.h + (back ? Math.PI : 0);
+      mark.add(board);
     }
     for (const s of [-1, 1]) {
       const post = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 4.6, 6), new T.MeshLambertMaterial({ color: 0x9aa3ad }));
-      post.position.set(sx + Math.cos(EXIT.h) * s * 1.8, 2.3, sz - Math.sin(EXIT.h) * s * 1.8);
-      exitMark.add(post);
+      post.position.set(sx + Math.cos(ex.h) * s * 1.8, 2.3, sz - Math.sin(ex.h) * s * 1.8);
+      mark.add(post);
     }
-    exitMark.visible = false;
-    scene.add(exitMark);
+    mark.visible = false;
+    scene.add(mark);
+    ex.mark = mark;
+    ex.ring = ring;
   }
   function updateExit(dt, t) {
-    if (!EXIT) return;
-    const open = ptOpen();
-    exitMark.visible = open;
-    if (!open) return;
-    exitMark.userData.ring.material.opacity = 0.5 + 0.3 * Math.sin(t * 4);
-    const p = drv || player, d = Math.hypot(p.x - EXIT.x, p.z - EXIT.z);
+    if (!EXITS.length) return;
+    const p = drv || player;
+    let near = null, nd = 1e9;
+    for (const ex of EXITS) {
+      const open = cityOpen(ex.to);
+      ex.mark.visible = open;
+      if (!open) continue;
+      ex.ring.material.opacity = 0.5 + 0.3 * Math.sin(t * 4);
+      const d = Math.hypot(p.x - ex.x, p.z - ex.z);
+      if (d < nd) {
+        nd = d;
+        near = ex;
+      }
+    }
     exitTipT -= dt;
     // נכנסים לטבעת מבחוץ (לא כשמגיעים לעיר בדיוק עליה)
-    if (d > 28) exitArmed = true;
-    if (!exitArmed || d > 7.5 || mode !== 'play') return;
+    if (nd > 28) exitArmed = true;
+    if (!near || !exitArmed || nd > 7.5 || mode !== 'play') return;
     if (drv !== van || travelBlocked()) {
       if (exitTipT <= 0) {
         exitTipT = 6;
-        toast(travelBlocked() ? 'קודם לסיים את המשימה שבאמצע' : '🚐 ל' + CITY_NAMES[OTHER_CITY] + ' נוסעים עם טנק המבצעים');
+        toast(travelBlocked() ? 'קודם לסיים את המשימה שבאמצע' : '🚐 ל' + CITY_NAMES[near.to] + ' נוסעים עם טנק המבצעים');
       }
       return;
     }
     exitArmed = false;
-    travel(OTHER_CITY, true);
+    travel(near.to, true);
   }
   function travel(to, byRoad) {
     if (to === CITY) return;
     if (drv && drv.auto) return;
     save();
     S.cities[CITY] = { player: S.player, van: S.van, rides: S.rides };
-    S.flags.ptUnlocked = true;
-    if (to === 'pt') S.flags.ptVisited = true;
+    if (to === 'pt') S.flags.ptUnlocked = S.flags.ptVisited = true;
+    if (to === 'rh') S.flags.rhUnlocked = S.flags.rhVisited = true;
     S.flags.roadIn = byRoad ? to : null;
+    S.flags.roadFrom = byRoad ? CITY : null;
     S.flags.justTraveled = to;
     S.city = to;
     S.inVan = false;
@@ -3023,14 +3082,17 @@
     A.door && A.door('tank');
     setTimeout(() => location.replace(location.pathname + location.hash), 1900);
   }
-  $('p-travel').addEventListener('click', () => {
-    resumeGame();
-    goCity();
-  });
-  $('bm-travel').addEventListener('click', () => {
-    goCity();
-    drawBigMap();
-  });
+  // כפתורי ניווט לערים השכנות (בתפריט ההשהיה ובמפה) — כפתור לכל יציאה פתוחה
+  function fillTravelBtns(box, label, onPick) {
+    box.innerHTML = '';
+    for (const ex of openExits()) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = label + CITY_NAMES[ex.to];
+      b.addEventListener('click', () => onPick(ex.to));
+      box.appendChild(b);
+    }
+  }
   $('call-yes').addEventListener('click', () => endCall(true));
   $('call-no').addEventListener('click', () => endCall(false));
 
@@ -3438,7 +3500,7 @@
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
       get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, rcWalkers, get PS() { return PS; },
-      player, van, npcById, keys, EXIT, gps, exitMark, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
+      player, van, npcById, keys, EXITS, gps, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
   try {
