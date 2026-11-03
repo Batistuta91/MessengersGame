@@ -313,7 +313,12 @@
       const s = document.createElement('script');
       s.src = src;
       s.onload = res;
-      s.onerror = () => rej(new Error(src));
+      // כשל רשת לא נשמר — הניסיון הבא טוען מחדש
+      s.onerror = () => {
+        delete scripts[src];
+        s.remove();
+        rej(new Error(src));
+      };
       document.head.appendChild(s);
     }));
   // האנימציות משותפות לכל הדמויות: מפענחים פעם אחת, ולכל דמות שלד-מקור משלה (שכפול)
@@ -324,6 +329,9 @@
       const p = parse(b64(window.SHALIACH_ANIMS));
       window.SHALIACH_ANIMS = null;
       return p;
+    }, (e) => {
+      animsP = null;
+      throw e;
     }));
 
   const HAIR = /short0|bob0|ponytail|long0/i;

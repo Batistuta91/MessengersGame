@@ -422,7 +422,11 @@
       n.rc = rc;
       n.p.group.add(rc.group);
       applyRealChar();
-    }, () => (rcBusy = false));
+    }, () => {
+      // נכשל (רשת חלשה): מנסים שוב בעוד חצי דקה
+      rcBusy = false;
+      setTimeout(() => (n.rcLoading = false), 30000);
+    });
   }
   function attachRealWalker(w) {
     if (S.settings.realChar === false || !G.loadNPCChar || w.rc || w.rcLoading || rcBusy) return;
@@ -435,7 +439,10 @@
       w.rc = rc;
       w.p.group.add(rc.group);
       applyRealChar();
-    }, () => (rcBusy = false));
+    }, () => {
+      rcBusy = false;
+      setTimeout(() => (w.rcLoading = false), 30000);
+    });
   }
   function addNPC(d) {
     const p = G.makePerson(d.look);
@@ -1854,9 +1861,8 @@
     h += row('✦ ״השליח שלא מוותר״', stOf('secret'), true);
     h += '<li><span>📜 דפי תניא</span><em>' + pages('hod', 12) + '</em></li>';
     h += '<li><span>🏠 בית חב״ד</span><em>' + LEVELS[Math.min(LEVELS.length, S.chabadLevel) - 1].name + '</em></li></ul>';
-    const ptOpen = S.flags.ptUnlocked || CITY === 'pt';
     h += '<h3 class="jr-h">פרק 2 · פתח תקווה</h3>';
-    if (!ptOpen) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
+    if (!ptOpen()) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
     else {
       h += '<ul class="jr-list">';
       h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״לשמח את העיר״', stOf('ptB')) + row('משימה 4 · ״מצה שמורה לכל השכונה״', stOf('pesach'));
@@ -1895,7 +1901,7 @@
   function pauseGame() {
     if (G.voice) G.voice.stop();
     $('p-travel').textContent = CITY === 'pt' ? '🚐 חזרה להוד השרון' : '🚐 נסיעה לפתח תקווה';
-    show($('p-travel'), !!S.flags.ptUnlocked || CITY === 'pt');
+    show($('p-travel'), ptOpen());
     mode = 'paused';
     refreshSettingsLabels();
     show($('pause'), true);
@@ -2572,6 +2578,8 @@
     if (!W.drawMap || (mode !== 'play' && mode !== 'paused')) return;
     if (mode === 'paused') show($('pause'), false);
     mode = 'map';
+    $('bm-travel').textContent = CITY === 'pt' ? '🚐 להוד השרון' : '🚐 לפתח תקווה';
+    show($('bm-travel'), ptOpen());
     show(bm, true);
     A.click();
     if (!bmImg) {
@@ -2807,6 +2815,12 @@
   }
   function updateCall(dt) {
     if (call) {
+      // ההצעה כבר לא רלוונטית (התחילה משימה / בית חב״ד כבר שודרג) — השיחה נעלמת בשקט
+      if (M.activeQuest() || (call.off.id === 'up' && S.chabadLevel > 1)) {
+        call = null;
+        show($('call'), false);
+        return;
+      }
       call.t += dt;
       call.ring -= dt;
       if (call.ring <= 0) {
@@ -2853,6 +2867,18 @@
 
   // ================= נסיעה בין ערים =================
   const CITY_NAMES = { hod: 'הוד השרון', pt: 'פתח תקווה' };
+  // פתח תקווה נפתחת כשמסיימים את ״האור הגדול״ — דפי תניא ור׳ זלמן לא חוסמים
+  function ptOpen() {
+    return !!S.flags.ptUnlocked || CITY === 'pt' || !!(S.quests && S.quests.m4 && S.quests.m4.status === 'complete');
+  }
+  // משימה סודית (בלי שעון) לא חוסמת נסיעה; היא נשמרת וממשיכה כשחוזרים
+  function tryTravel() {
+    const aq = M.activeQuest();
+    if (aq && aq !== 'secret' && aq !== 'ptS') return toast('קודם לסיים את המשימה שבאמצע');
+    show($('pause'), false);
+    show(bm, false);
+    travel(CITY === 'pt' ? 'hod' : 'pt');
+  }
   function travel(to) {
     if (to === CITY) return;
     if (drv && drv.auto) return;
@@ -2873,11 +2899,8 @@
     A.door && A.door('tank');
     setTimeout(() => location.replace(location.pathname + location.hash), 1900);
   }
-  $('p-travel').addEventListener('click', () => {
-    if (M.activeQuest()) return toast('קודם לסיים את המשימה שבאמצע');
-    show($('pause'), false);
-    travel(CITY === 'pt' ? 'hod' : 'pt');
-  });
+  $('p-travel').addEventListener('click', tryTravel);
+  $('bm-travel').addEventListener('click', tryTravel);
   $('call-yes').addEventListener('click', () => endCall(true));
   $('call-no').addEventListener('click', () => endCall(false));
 
@@ -2988,14 +3011,15 @@
         if (d < 3600) near.push([d, lp]);
       }
       near.sort((a, b) => a[0] - b[0]);
+      // לא משנים visible: כל שינוי במספר האורות הנראים מקמפל מחדש את כל ה-shaders (גמגום). אור לא בשימוש = עוצמה 0
       lampLights.forEach((l, i) => {
         const n = near[i];
-        l.visible = !!n;
+        l.userData.on = !!n;
         if (n) l.position.set(n[1][0], 4.3, n[1][1]);
       });
     }
     const li = night > 0.3 ? (night - 0.3) / 0.7 : 0;
-    for (const l of lampLights) l.intensity = li * 1.6;
+    for (const l of lampLights) l.intensity = l.userData.on ? li * 1.6 : 0;
     const v = drv;
     headL.intensity = v && v.type !== 'bike' ? li * 2.2 : v ? li * 1.2 : 0;
     if (v) {

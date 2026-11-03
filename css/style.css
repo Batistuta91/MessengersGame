@@ -270,6 +270,9 @@ body.touch #minimap { width: 120px; height: 120px; border-width: 3px; }
 body.touch #street-sign { bottom: auto; top: 44px; right: auto; left: 186px; min-width: 0; padding: 4px 10px; }
 body.touch #street-sign b { font-size: 16px; }
 body.touch #street-sign small { font-size: 11px; }
+/* בנהיגה בטלפון כפתורי הנהיגה תופסים ~180px בפינה הימנית התחתונה — רשימת המשימה נעצרת מעליהם ונגללת */
+body.touch.in-van #hud-right { max-height: calc(100vh - 196px); }
+body.touch.in-van #tracker { min-height: 0; overflow-y: auto; }
 
 @media (max-height: 560px), (max-width: 900px) {
   #minimap-wrap { width: 150px; }
@@ -341,6 +344,7 @@ body.smooth canvas#game, body.smooth canvas { image-rendering: auto; }
 #bigmap .bm-tip { font-size: 13px; opacity: .85; }
 #bigmap .btn { padding: 4px 12px; font-size: 18px; min-width: 40px; }
 body.touch #bigmap .bm-tip { display: none; }
+#bigmap #bm-travel { white-space: nowrap; font-size: 15px; }
 
 /* שורת כפתורים בתפריט ההשהיה */
 .p-row { display: flex; gap: 8px; }

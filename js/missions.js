@@ -833,7 +833,17 @@
         ],
       },
     });
+    // אחרי ״האור הגדול״ פתח תקווה תמיד פתוחה: משה מציע לנסוע בכל שיחה (גם אם השיחה בטלפון הוחמצה, וגם באמצע ר׳ זלמן)
     function mosheDialog() {
+      const d = mosheLines();
+      const a = activeId();
+      if (!done('m4') || (a && a !== 'secret')) return d;
+      if (!S().flags.ptUnlocked) return PT_OFFER();
+      if (d.a.go) return d;
+      d.a.c = (d.a.c || [{ t: 'עוד קצת פה' }]).concat({ t: '🚐 נוסעים לפתח תקווה', fx: () => api.travel('pt') });
+      return d;
+    }
+    function mosheLines() {
       const a = activeId();
       if (a) return { a: { s: 'npc', t: HINT[a]() + (a !== 'secret' ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
@@ -841,7 +851,7 @@
       if (q('secret').status === 'idle') return { a: { s: 'npc', t: 'ר׳ זלמן... עוד לא הלכת אליו? אין לחץ — אבל הוא מחכה.', c: [{ t: 'אני הולך עכשיו.', fx: startSecret }, { t: 'עוד מעט' }] } };
       if (S().chabadLevel === 3 && M.canUpgrade(4)) return { a: { s: 'npc', t: 'שמעתי מה עשית בפתח תקווה — השוק, שניידר, והסדר לכל השכונה! הגיע הזמן: נהפוך את בית חב״ד ל״מרכז השליחות הגדול״, בהשראת 770. היכנס בדלת!' } };
       if (S().chabadLevel === 4) return { a: { s: 'npc', t: 'תסתכל על החזית הזאת... 770 בהוד השרון! מכאן יוצאים שלוחים לכל הארץ. ר׳ מנחם שולח ד״ש.' } };
-      if (done('m4') && S().flags.ptUnlocked) return { a: { s: 'npc', t: 'ר׳ מנחם מחכה לך בפתח תקווה! נוסעים מתפריט ההשהיה. ' + (S().chabadLevel < 3 ? 'ואל תשכח לשדרג את בית חב״ד למרכז קהילתי — היכנס בדלת.' : 'אני שומר פה על הבית.') } };
+      if (done('m4') && S().flags.ptUnlocked) return { a: { s: 'npc', t: 'ר׳ מנחם מחכה לך בפתח תקווה! ' + (S().chabadLevel < 3 ? 'ואל תשכח לשדרג את בית חב״ד למרכז קהילתי — היכנס בדלת.' : 'אני שומר פה על הבית.') } };
       if (done('m4') && S().chabadLevel < 3) return { a: { s: 'npc', t: 'ראית את הכיכר? כל העיר מוארת! עכשיו הזמן להפוך את בית חב״ד למרכז קהילתי — היכנס בדלת.' } };
       if (done('m4') && !done('secret') && S().community < 6) return { a: { s: 'npc', t: 'השכונה מתעוררת. תמשיך להכיר אנשים — לפעמים דווקא השיחה הקטנה פותחת את הדלת הגדולה.' } };
       if (done('secret')) return { a: { s: 'npc', t: 'עשית פה עולם ומלואו, שליח. ר׳ זלמן חזר, יש מניין, יש שולחן שבת ויש אור בכיכר. ועכשיו — ר׳ מנחם מחכה לך בפתח תקווה.' } };
@@ -852,6 +862,7 @@
       const nx = nextQuest();
       if (nx && available(nx)) return 'mission';
       if (q('secret').status === 'idle') return 'mission';
+      if (done('m4') && !S().flags.ptUnlocked) return 'mission';
       if (done('m4') && S().chabadLevel < 3) return 'star';
       if (S().chabadLevel === 3 && M.canUpgrade(4)) return 'star';
       return null;
