@@ -826,10 +826,10 @@
     const PT_OFFER = () => ({
       a: { s: 'npc', t: 'יש לי בקשה גדולה. ר׳ מנחם, השליח בפתח תקווה, צריך יד: השוק לפני שבת, ביקור חולים בשניידר, ומצות לכל העיר לקראת פסח.', go: 'b' },
       b: {
-        s: 'npc', t: 'תיסע אליו עם הטנק? פה בהוד השרון הכול מסודר — ותמיד אפשר לחזור, מתפריט ההשהיה.',
+        s: 'npc', t: 'תיסע אליו עם הטנק? פה בהוד השרון הכול מסודר. סמנתי לך במפה את היציאה מהעיר לכיוון פתח תקווה — ותמיד אפשר לחזור באותה דרך.',
         c: [
-          { t: 'יוצא לפתח תקווה!', fx: () => api.travel('pt') },
-          { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.ptUnlocked = true; api.toast('אפשר לנסוע לפתח תקווה מתפריט ההשהיה (' + (isTouch ? 'כפתור השהיה' : 'Esc') + ')', 'gold'); } },
+          { t: 'יוצא לפתח תקווה!', fx: () => { S().flags.ptUnlocked = true; api.goCity(); } },
+          { t: 'עוד קצת פה, ואז אסע', fx: () => { S().flags.ptUnlocked = true; api.toast('היציאה לפתח תקווה מסומנת במפה (' + (isTouch ? 'כפתור המפה' : 'M') + ')', 'gold'); } },
         ],
       },
     });
@@ -840,7 +840,7 @@
       if (!done('m4') || (a && a !== 'secret')) return d;
       if (!S().flags.ptUnlocked) return PT_OFFER();
       if (d.a.go) return d;
-      d.a.c = (d.a.c || [{ t: 'עוד קצת פה' }]).concat({ t: '🚐 נוסעים לפתח תקווה', fx: () => api.travel('pt') });
+      d.a.c = (d.a.c || [{ t: 'עוד קצת פה' }]).concat({ t: '🚐 נוסעים לפתח תקווה', fx: () => api.goCity() });
       return d;
     }
     function mosheLines() {
@@ -1063,7 +1063,7 @@
       else if (S().chabadLevel === 3 && M.canUpgrade(4)) h += '<div class="tr-obj">היכנסו לבית חב״ד ושדרגו ל״מרכז השליחות הגדול״ <span class="ic">★</span></div>';
       else if (S().chabadLevel >= 4) h += '<div class="tr-obj">🏛 770 בהוד השרון! מכאן יוצאים שלוחים לכל הארץ.</div>';
       else if (['pesach', 'pt3'].some((id) => S().quests[id] && S().quests[id].status === 'complete')) h += '<div class="tr-obj">פרק 2 הושלם. ' + (S().chabadLevel < 3 ? 'שדרגו קודם את בית חב״ד למרכז קהילתי.' : '') + '</div>';
-      else h += '<div class="tr-obj">פרק 2 מחכה: ר׳ מנחם בפתח תקווה. נוסעים מתפריט ההשהיה (' + (isTouch ? 'כפתור השהיה' : 'Esc') + ').</div>';
+      else h += '<div class="tr-obj">פרק 2 מחכה: ר׳ מנחם בפתח תקווה. סעו בטנק ליציאה מהעיר — היא מסומנת במפה 🚐</div>';
       return h;
     }
 

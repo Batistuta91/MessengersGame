@@ -601,7 +601,7 @@
       if (a) return { a: { s: 'npc', t: HINT[a]() + (q(a).timeLeft !== undefined ? ' נשארו ' + api.fmtTime(q(a).timeLeft) + '.' : '') } };
       const nx = nextQuest();
       if (nx && available(nx)) return OFFER[nx]();
-      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון, בתפריט ההשהיה. ותבוא לבקר!' } };
+      return { a: { s: 'npc', t: 'שליח, מה שעשית בפתח תקווה — השוק, שניידר, השמחה ברחובות והסדר' + (done('ptS') ? ', ור׳ יואל' : '') + ' — אין מילים. כשתרצה לחזור להוד השרון — היציאה מהעיר מסומנת במפה. ותבוא לבקר!' } };
     }
     function mosheIcon() {
       if (activeId()) return 'hint';
