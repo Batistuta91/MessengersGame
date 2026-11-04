@@ -285,8 +285,9 @@
     ux /= L;
     uz /= L;
     for (const pred of [(o) => o.cls === 'major', (o) => o.rd.t !== 'service']) {
-      // במפה גדולה לא בקצה ממש — שהנסיעה לא תהיה ארוכה מדי
-      for (let d = Math.min(W.HALF - 45, 900); d > 150; d -= 25) {
+      // במפה גדולה לא בקצה ממש — שהנסיעה לא תהיה ארוכה מדי.
+      // בראש העין 900 מ׳ זה באמצע העיר (על הדרך למגדל אפק) — שם היציאה בקצה המערבי
+      for (let d = Math.min(W.HALF - 45, CITY === 'rh' ? 1900 : 900); d > 150; d -= 25) {
         const r = W.nearestRoad(ux * d, uz * d, 128, pred);
         if (!r || Math.max(Math.abs(r.x), Math.abs(r.z)) > W.HALF - 32) continue;
         // כיוון הנסיעה פנימה, לאורך הכביש
@@ -2981,6 +2982,7 @@
     if (!ex) return travel(to);
     gps.dest = 'exit';
     gps.exit = ex;
+    gps.exitQuest = M.activeQuest() || null;
     gps.t = 0;
     refreshGpsBtns();
     updateGps(0.01);
@@ -3049,10 +3051,13 @@
     // נכנסים לטבעת מבחוץ (לא כשמגיעים לעיר בדיוק עליה)
     if (nd > 28) exitArmed = true;
     if (!near || !exitArmed || nd > 7.5 || mode !== 'play') return;
-    if (drv !== van || travelBlocked()) {
+    // באמצע משימה (גם סודית) לא עוברים עיר בטעות — רק אם בחרו בנסיעה במפה/בתפריט
+    const aq = M.activeQuest();
+    const midQuest = !!aq && !(gps.dest === 'exit' && gps.exit === near && gps.exitQuest === aq);
+    if (drv !== van || travelBlocked() || midQuest) {
       if (exitTipT <= 0) {
         exitTipT = 6;
-        toast(travelBlocked() ? 'קודם לסיים את המשימה שבאמצע' : '🚐 ל' + CITY_NAMES[near.to] + ' נוסעים עם טנק המבצעים');
+        toast(travelBlocked() || midQuest ? 'באמצע משימה — לא יוצאים מהעיר עכשיו' : '🚐 ל' + CITY_NAMES[near.to] + ' נוסעים עם טנק המבצעים');
       }
       return;
     }
