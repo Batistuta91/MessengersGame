@@ -34,7 +34,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261104c">
+  <link rel="stylesheet" href="css/style.css?v=20261104d">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -69,6 +69,7 @@
       <div id="joy" class="joybar" title="שמחה ושליחות">
         <span class="heart">♥</span>
         <div class="bar"><div id="joy-fill"></div></div>
+        <b id="joy-lv" class="joy-lv" title="רמת שמחה">1</b>
       </div>
     </div>
 
@@ -131,7 +132,7 @@
       <h2 id="res-title"></h2>
       <p id="res-note" class="res-note hidden"></p>
       <ul id="res-stats" class="res-stats"></ul>
-      <h3>מה השתנה בעיר</h3>
+      <h3 id="res-ch-h">מה השתנה בעיר</h3>
       <ul id="res-changes" class="res-changes"></ul>
       <div class="btns">
         <button id="res-continue" class="btn big">המשך לחקור את העיר</button>
@@ -157,6 +158,7 @@
         <button id="p-journal" class="btn">📖 יומן השליחות</button>
         <button id="p-sound" class="btn">צליל: פועל</button>
         <button id="p-voice" class="btn">קולות דמויות: פועלים</button>
+        <button id="p-vibrate" class="btn hidden">רטט: פועל</button>
         <button id="p-look" class="btn">מראה: פיקסלים</button>
         <button id="p-realchar" class="btn">דמויות: מציאותיות</button>
         <button id="p-shadows" class="btn">גרפיקה: מלאה</button>
@@ -217,21 +219,21 @@
 
   <div id="rotate"><div>↻</div>סובבו את המכשיר לרוחב</div>
 
-  <script src="lib/three.min.js?v=20261104c"></script>
-  <script src="js/util.js?v=20261104c"></script>
-  <script src="music/playlist.js?v=20261104c"></script>
+  <script src="lib/three.min.js?v=20261104d"></script>
+  <script src="js/util.js?v=20261104d"></script>
+  <script src="music/playlist.js?v=20261104d"></script>
   <!-- רשימה מקומית (כולל שירים מ-music/local) — קיימת רק במחשב שלך, לא באתר -->
-  <script src="music/playlist.local.js?v=20261104c" onerror="this.remove()"></script>
-  <script src="js/audio.js?v=20261104c"></script>
+  <script src="music/playlist.local.js?v=20261104d" onerror="this.remove()"></script>
+  <script src="js/audio.js?v=20261104d"></script>
   <!-- רכבים: מודלים אמיתיים (CC0) -->
-  <script src="data/vehicles.js?v=20261104c"></script>
-  <script src="js/vehmodels.js?v=20261104c"></script>
-  <script src="data/ground.js?v=20261104c"></script>
-  <script src="data/facade.js?v=20261104c"></script>
-  <script src="data/nature.js?v=20261104c"></script>
-  <script src="js/nature.js?v=20261104c"></script>
-  <script src="js/entities.js?v=20261104c"></script>
-  <script src="js/world.js?v=20261104c"></script>
+  <script src="data/vehicles.js?v=20261104d"></script>
+  <script src="js/vehmodels.js?v=20261104d"></script>
+  <script src="data/ground.js?v=20261104d"></script>
+  <script src="data/facade.js?v=20261104d"></script>
+  <script src="data/nature.js?v=20261104d"></script>
+  <script src="js/nature.js?v=20261104d"></script>
+  <script src="js/entities.js?v=20261104d"></script>
+  <script src="js/world.js?v=20261104d"></script>
   <script>
     // איזו עיר לטעון: לפי השמירה (או city=pt בכתובת, לבדיקות)
     (function () {
@@ -242,27 +244,27 @@
       } catch (e) {}
       var m = /[?&]city=(\w+)/.exec(location.search);
       if (m) c = m[1];
-      document.write('<script src="data/' + ({ pt: 'city-pt.js', rh: 'city-rh.js' }[c] || 'city.js') + '?v=20261104c"><\/script>');
+      document.write('<script src="data/' + ({ pt: 'city-pt.js', rh: 'city-rh.js' }[c] || 'city.js') + '?v=20261104d"><\/script>');
     })();
   </script>
   <script>
     // אם קובץ העיר לא נטען (למשל עדיין עולה לאתר) — טוענים את הוד השרון במקום מסך שחור
-    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261104c"><\/script>');
+    if (!window.CITY_DATA) document.write('<script src="data/city.js?v=20261104d"><\/script>');
   </script>
-  <script src="js/city.js?v=20261104c"></script>
-  <script src="js/missions.js?v=20261104c"></script>
-  <script src="js/missions-pt.js?v=20261104c"></script>
-  <script src="js/missions-rh.js?v=20261104c"></script>
-  <script src="js/traffic.js?v=20261104c"></script>
-  <script src="js/events.js?v=20261104c"></script>
-  <script src="js/collect.js?v=20261104c"></script>
-  <script src="js/matzah.js?v=20261104c"></script>
-  <script src="js/pesach.js?v=20261104c"></script>
-  <script src="js/voice.js?v=20261104c"></script>
-  <script src="js/fx.js?v=20261104c"></script>
-  <script src="lib/GLTFLoader.js?v=20261104c"></script>
-  <script src="js/realchar.js?v=20261104c"></script>
-  <script src="js/game.js?v=20261104c"></script>
+  <script src="js/city.js?v=20261104d"></script>
+  <script src="js/missions.js?v=20261104d"></script>
+  <script src="js/missions-pt.js?v=20261104d"></script>
+  <script src="js/missions-rh.js?v=20261104d"></script>
+  <script src="js/traffic.js?v=20261104d"></script>
+  <script src="js/events.js?v=20261104d"></script>
+  <script src="js/collect.js?v=20261104d"></script>
+  <script src="js/matzah.js?v=20261104d"></script>
+  <script src="js/pesach.js?v=20261104d"></script>
+  <script src="js/voice.js?v=20261104d"></script>
+  <script src="js/fx.js?v=20261104d"></script>
+  <script src="lib/GLTFLoader.js?v=20261104d"></script>
+  <script src="js/realchar.js?v=20261104d"></script>
+  <script src="js/game.js?v=20261104d"></script>
   <script>
     // התקנה כאפליקציה: רישום ה-Service Worker וכפתור ״התקנה״ במסך הפתיחה
     (function () {

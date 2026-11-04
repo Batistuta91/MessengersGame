@@ -673,7 +673,7 @@
   // ================= ממשק =================
   const ui = {
     hud: $('hud'), title: $('title'), dialog: $('dialog'), dName: $('d-name'), dText: $('d-text'), dChoices: $('d-choices'), dNext: $('d-next'),
-    prompt: $('prompt'), toasts: $('toasts'), joyFill: $('joy-fill'), joyVal: $('joy-val'), joyBox: $('joy'), stats: $('stats'), tracker: $('tracker'),
+    prompt: $('prompt'), toasts: $('toasts'), joyFill: $('joy-fill'), joyVal: $('joy-val'), joyLv: $('joy-lv'), joyBox: $('joy'), stats: $('stats'), tracker: $('tracker'),
     clock: $('clock'), keys: $('keys-hint'), radio: $('radio-label'), touch: $('touch'), actBtn: $('t-act'),
   };
   function setText(el, s) {
@@ -727,16 +727,44 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   };
 
+  // רטט בטלפון (אם המכשיר תומך ולא כובה בהגדרות)
+  function buzz(p) {
+    if (!isTouch || S.settings.vibrate === false || !navigator.vibrate) return;
+    try {
+      navigator.vibrate(p);
+    } catch (e) {}
+  }
+  // סטטיסטיקה לכל עיר — לסיכום הפרק. partial: התחלנו לספור כשהפרק כבר היה באמצע
+  function cityStats() {
+    S.stats = S.stats || {};
+    if (!S.stats[CITY]) S.stats[CITY] = { t: 0, joy: 0, comm: 0, acts: 0, partial: CHAPTERS[CITY] ? CHAPTERS[CITY].main.some((id) => mainDone(id)) : false };
+    return S.stats[CITY];
+  }
+  // שמחה בלי תקרה: כל 100 = רמה. הפס מראה את ההתקדמות לרמה הבאה
+  const joyLevel = (j) => Math.floor(j / 100) + 1;
   function addJoy(n) {
-    S.joy = G.clamp(S.joy + n, 0, 100);
+    const lv0 = joyLevel(S.joy);
+    S.joy = Math.max(0, S.joy + n);
     if (S.mission.status === 'active') S.mission.joyGained += n;
     if (M) M.onGain('joy', n);
+    if (n > 0) {
+      const st = cityStats();
+      st.joy += n;
+      if (n >= 3) st.acts++;
+    }
     ui.joyBox.classList.remove('pulse');
     void ui.joyBox.offsetWidth;
     ui.joyBox.classList.add('pulse');
     if (FX && n >= 3) FX.sparkle(drv ? drv.x : player.x, drv ? drv.z : player.z, 6 + n);
+    const lv = joyLevel(S.joy);
+    if (lv > lv0) {
+      toast('✨ רמת שמחה ' + lv + '! העיר מרגישה את האור', 'gold');
+      A.cheer && A.cheer();
+      buzz([40, 60, 40, 60, 90]);
+    } else if (n >= 3) buzz(30);
   }
   function addCommunity(n) {
+    if (n > 0) cityStats().comm += n;
     S.community += n;
     if (S.mission.status === 'active') S.mission.communityGained += n;
     if (M) M.onGain('community', n);
@@ -1176,6 +1204,7 @@
       if (hit && (px * fx + pz * fz) * Math.sign(v.v) < -0.005) {
         if (Math.abs(v.v) > 7 && bumpCd <= 0) {
           A.crash(Math.min(1, Math.abs(v.v) / 20));
+          buzz(Math.round(40 + Math.min(1, Math.abs(v.v) / 20) * 80));
           bumpCd = 0.6;
           if (TR) TR.bumped(v);
         }
@@ -1839,10 +1868,12 @@
     $('res-title').textContent = d.title;
     $('res-stats').innerHTML = (d.rows || []).map(([k, v]) => '<li><span>' + k + '</span><b>' + v + '</b></li>').join('');
     $('res-changes').innerHTML = (d.changes || []).map((c) => '<li>' + c + '</li>').join('');
+    $('res-ch-h').textContent = d.changesTitle || 'מה השתנה בעיר';
     show($('res-note'), !!d.note);
     $('res-note').textContent = d.note || '';
     show($('results'), true);
     A.success();
+    buzz([60, 80, 60]);
   }
   function queueResults(d, delay) {
     setTimeout(() => (queuedResults = d), delay === undefined ? 1200 : delay);
@@ -1874,7 +1905,7 @@
     const nextLv = S.chabadLevel + 1;
     const canUp = (nextLv === 2 && S.mission.status === 'complete') || (nextLv === 3 && M.canUpgrade(3)) || (nextLv === 4 && M.canUpgrade(4));
     const lockText = { 2: 'נפתח אחרי השלמת משימה 1', 3: 'נפתח אחרי משימה 4, ״האור הגדול״', 4: 'נפתח אחרי פרק 2 בפתח תקווה' };
-    let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div><ol class="levels">';
+    let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות · רמה ' + joyLevel(S.joy) + '</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div><ol class="levels">';
     LEVELS.forEach((L, i) => {
       const n = i + 1;
       let st, cls;
@@ -1930,7 +1961,51 @@
     mode = 'play';
   }
   $('panel-close').addEventListener('click', closePanel);
+  // ================= סיכום פרק =================
+  const CHAPTERS = {
+    hod: { n: 1, main: ['m1', 'm2', 'm3', 'm4'], secret: 'secret', pages: 12 },
+    pt: { n: 2, main: ['pt1', 'pt2', 'ptB', 'pesach'], secret: 'ptS', pages: 18 },
+    rh: { n: 3, main: ['rh1', 'rh2', 'rh3', 'rh4'], secret: 'rhS', pages: 18 },
+  };
+  const mainDone = (id) => (id === 'm1' ? S.mission.status === 'complete' : qDone(id));
+  const chapterDone = (c) => !!CHAPTERS[c] && mainDone(CHAPTERS[c].main[CHAPTERS[c].main.length - 1]);
+  function fmtLong(s) {
+    const m = Math.round(s / 60);
+    return m < 60 ? m + ' דקות' : Math.floor(m / 60) + ' שע׳ ו-' + (m % 60) + ' דק׳';
+  }
+  function chapterSummary(c, onClose) {
+    const ch = CHAPTERS[c], st = (S.stats && S.stats[c]) || { partial: true };
+    const got = ((S.collect && S.collect[c]) || []).length;
+    const sec = qDone(ch.secret), all = got >= ch.pages;
+    const done = ch.main.filter(mainDone).length;
+    // כוכב על הפרק, כוכב על המשימה הסודית, כוכב על כל דפי התניא
+    const stars = 1 + (sec ? 1 : 0) + (all ? 1 : 0);
+    const rows = [
+      ['משימות', done + ' מתוך ' + ch.main.length],
+      ['✦ המשימה הסודית', sec ? '✓ הושלמה' : 'עוד מחכה'],
+      ['📜 דפי תניא', got + ' מתוך ' + ch.pages],
+    ];
+    if (!st.partial) {
+      rows.push(['מעשים טובים', st.acts], ['שמחה שהבאתם', '+' + st.joy], ['קשרים חדשים', '+' + st.comm], ['זמן בעיר', fmtLong(st.t)]);
+    }
+    rows.push(['♥ רמת שמחה', joyLevel(S.joy)]);
+    const tips = [];
+    if (!sec) tips.push('✦ מישהו בעיר עדיין מחכה לעזרה — המשימה הסודית פתוחה');
+    if (!all) tips.push('📜 נשארו ' + (ch.pages - got) + ' דפי תניא נסתרים ב' + CITY_NAMES[c]);
+    if (stars === 3) tips.push('🏆 פרק מושלם! כל הכבוד, שליח');
+    else tips.push('אפשר לחזור לכאן בכל זמן ולהשלים את הכוכבים');
+    showResultsData({ stars, title: '🎉 פרק ' + ch.n + ' הושלם · ' + CITY_NAMES[c], rows, changes: tips, changesTitle: stars === 3 ? 'כל הכבוד' : 'מה עוד אפשר לעשות', onClose });
+  }
+  // פעם אחת, אחרי מסך התוצאות של המשימה האחרונה בפרק
+  function updateChapterEnd() {
+    if (mode !== 'play' || !chapterDone(CITY) || S.flags['sum_' + CITY] || queuedResults || pendingResults || dlg || call) return;
+    S.flags['sum_' + CITY] = true;
+    save();
+    chapterSummary(CITY);
+  }
+
   // ================= יומן השליחות: כל ההתקדמות במקום אחד =================
+  const sumBtn = (c) => (chapterDone(c) ? '<li class="jr-sum"><button class="btn" data-sum="' + c + '">📊 סיכום הפרק</button></li>' : '');
   function journalHTML() {
     const Q = S.quests || {};
     const stOf = (id) => (Q[id] && Q[id].status) || 'locked';
@@ -1941,20 +2016,20 @@
       return '<li class="' + m[1] + '"><span>' + name + '</span><em>' + m[0] + '</em></li>';
     };
     const pages = (c, n) => ((S.collect && S.collect[c]) || []).length + '/' + n;
-    let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div>';
+    let h = '<div class="pn-stats"><div><b>' + Math.round(S.joy) + '</b><span>שמחה ושליחות · רמה ' + joyLevel(S.joy) + '</span></div><div><b>' + S.community + '</b><span>קשרים בקהילה</span></div><div><b>' + S.volunteers + '</b><span>מתנדבים</span></div></div>';
     h += '<h3 class="jr-h">פרק 1 · הוד השרון</h3><ul class="jr-list">';
     h += row('משימה 1 · ״רק חמש דקות״', S.mission.status === 'complete' ? 'complete' : S.mission.status === 'active' ? 'active' : 'idle');
     h += row('משימה 2 · ״איפה המניין?״', stOf('m2')) + row('משימה 3 · ״בלי קבלה״', stOf('m3')) + row('משימה 4 · ״האור הגדול״', stOf('m4'));
     h += row('✦ ״השליח שלא מוותר״', stOf('secret'), true);
     h += '<li><span>📜 דפי תניא</span><em>' + pages('hod', 12) + '</em></li>';
-    h += '<li><span>🏠 בית חב״ד</span><em>' + LEVELS[Math.min(LEVELS.length, S.chabadLevel) - 1].name + '</em></li></ul>';
+    h += '<li><span>🏠 בית חב״ד</span><em>' + LEVELS[Math.min(LEVELS.length, S.chabadLevel) - 1].name + '</em></li>' + sumBtn('hod') + '</ul>';
     h += '<h3 class="jr-h">פרק 2 · פתח תקווה</h3>';
     if (!ptOpen()) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את הוד השרון</p>';
     else {
       h += '<ul class="jr-list">';
       h += row('משימה 1 · ״שוק של ברכות״', stOf('pt1') === 'locked' ? 'idle' : stOf('pt1')) + row('משימה 2 · ״ביקור חולים״', stOf('pt2')) + row('משימה 3 · ״לשמח את העיר״', stOf('ptB')) + row('משימה 4 · ״מצה שמורה לכל השכונה״', stOf('pesach'));
       h += row('✦ ״הנכד של המייסדים״', stOf('ptS'), true);
-      h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li></ul>';
+      h += '<li><span>📜 דפי תניא</span><em>' + pages('pt', 18) + '</em></li>' + sumBtn('pt') + '</ul>';
     }
     h += '<h3 class="jr-h">פרק 3 · ראש העין</h3>';
     if (!cityOpen('rh')) h += '<p class="jr-lock">🔒 נפתח אחרי שמסיימים את פתח תקווה</p>';
@@ -1962,13 +2037,19 @@
       h += '<ul class="jr-list">';
       h += row('משימה 1 · ״מזוזה לכל דירה״', stOf('rh1') === 'locked' ? 'idle' : stOf('rh1')) + row('משימה 2 · ״סבא סעדיה מספר״', stOf('rh2')) + row('משימה 3 · ״תהלוכת ל״ג בעומר״', stOf('rh3')) + row('משימה 4 · ״עשרת הדברות בשבועות״', stOf('rh4'));
       h += row('✦ ״השומר במגדל אפק״', stOf('rhS'), true);
-      h += '<li><span>📜 דפי תניא</span><em>' + pages('rh', 18) + '</em></li></ul>';
+      h += '<li><span>📜 דפי תניא</span><em>' + pages('rh', 18) + '</em></li>' + sumBtn('rh') + '</ul>';
     }
     return h;
   }
   function openJournal() {
     show($('pause'), false);
     $('journal-body').innerHTML = journalHTML();
+    $('journal-body').querySelectorAll('[data-sum]').forEach((b) =>
+      b.addEventListener('click', () => {
+        show($('journal'), false);
+        chapterSummary(b.dataset.sum, openJournal);
+      })
+    );
     show($('journal'), true);
     mode = 'journal';
     A.click();
@@ -1988,6 +2069,8 @@
     $('p-look').textContent = 'מראה: ' + (G.SMOOTH ? 'חלק (חדש)' : 'פיקסלים');
     $('p-realchar').textContent = 'דמויות: ' + (S.settings.realChar !== false ? 'מציאותיות' : 'קלאסיות');
     $('p-voice').textContent = 'קולות דמויות: ' + (S.settings.voice !== false ? 'פועלים' : 'כבויים');
+    $('p-vibrate').textContent = 'רטט: ' + (S.settings.vibrate !== false ? 'פועל' : 'כבוי');
+    show($('p-vibrate'), isTouch && !!navigator.vibrate);
     if (G.voice) {
       G.voice.enabled = S.settings.voice !== false && S.settings.sound;
       if (!G.voice.enabled) G.voice.stop();
@@ -2079,6 +2162,12 @@
     refreshSettingsLabels();
     save();
     if (S.settings.voice && G.voice) G.voice.speak('שלום, שליח!', 'moshe');
+  });
+  $('p-vibrate').addEventListener('click', () => {
+    S.settings.vibrate = S.settings.vibrate === false;
+    refreshSettingsLabels();
+    save();
+    buzz(60);
   });
   $('p-realchar').addEventListener('click', () => {
     S.settings.realChar = S.settings.realChar === false;
@@ -2464,8 +2553,9 @@
     return 'לילה';
   }
   function updateHUD() {
-    ui.joyFill.style.width = S.joy + '%';
+    ui.joyFill.style.width = (S.joy % 100) + '%';
     setText(ui.joyVal, String(Math.round(S.joy)));
+    setText(ui.joyLv, String(joyLevel(S.joy)));
     setHTML(ui.stats, '<span>🤝 <b>' + S.community + '</b></span><span>🙋 <b>' + S.volunteers + '</b></span><span>🏠 <b>' + S.chabadLevel + '</b></span>' + (CL ? '<span title="דפי תניא נסתרים">📜 <b>' + CL.found + '/' + CL.total + '</b></span>' : ''));
     setHTML(ui.tracker, trackerHTML());
     const hh = Math.floor(S.time), mi = Math.floor((S.time - hh) * 60);
@@ -2964,6 +3054,7 @@
       if (call.ring <= 0) {
         call.ring = 1.7;
         A.phone();
+        buzz([180, 120, 180]);
       }
       if (call.t > 16) endCall(false);
       return;
@@ -3211,12 +3302,13 @@
       saveT = 0;
       save();
     }
+    if (mode === 'play') cityStats().t += dt;
     if (pendingResults && mode === 'play') showResults();
     else if (queuedResults && mode === 'play') {
       const d = queuedResults;
       queuedResults = null;
       showResultsData(d);
-    }
+    } else updateChapterEnd();
   }
 
   // ================= יום ולילה =================
@@ -3558,7 +3650,7 @@
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
       get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, rcWalkers, get PS() { return PS; },
-      player, van, npcById, keys, EXITS, gps, post, FX, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
+      player, van, npcById, keys, EXITS, gps, post, FX, addJoy, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
   try {
