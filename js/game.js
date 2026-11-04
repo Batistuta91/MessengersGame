@@ -58,10 +58,12 @@
       uniforms: {
         tColor: { value: rt.texture }, tDepth: { value: depthTex }, res: { value: new T.Vector2(1, 1) },
         cnear: { value: 1 }, cfar: { value: 100 }, persp: { value: 0 }, night: { value: 0 }, uSmooth: { value: G.SMOOTH ? 1 : 0 },
+        // בטלפון: חצי מהדגימות של הצל הרך
+        aoQ: { value: isTouch ? 0 : 1 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `
-        uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 res; uniform float cnear; uniform float cfar; uniform float persp; uniform float night; uniform float uSmooth;
+        uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 res; uniform float cnear; uniform float cfar; uniform float persp; uniform float night; uniform float uSmooth; uniform float aoQ;
         varying vec2 vUv;
         float Z(vec2 uv){
           float d = texture2D(tDepth, uv).x;
@@ -93,6 +95,25 @@
             edge = smoothstep(0.25, 0.9, zn + zs + ze + zw - 4.0 * zc);
           }
           c *= 1.0 - mix(0.5, 0.22, uSmooth) * edge;
+          // צל רך בפינות (AO): הפיקסל ״עמוק״ יותר מהממוצע של שני שכנים נגדיים = פינה/מגע עם הקרקע.
+          // ממוצע הרמוני בפרספקטיבה (1/z לינארי על משטח) — משטח שטוח לא מוחשך
+          float ao = 0.0;
+          float rad = persp > 0.5 ? clamp(48.0 / zc, 2.0, 11.0) : 7.0;
+          for (int i = 0; i < 4; i++) {
+            float a = float(i) * 0.785398 + 0.3;
+            for (int k = 1; k <= 2; k++) {
+              if (k == 2 && aoQ < 0.5) break;
+              // היסט בפיקסלים שלמים — שתי הדגימות סימטריות בדיוק, אחרת גם משטח שטוח מוחשך
+              vec2 o = floor(vec2(cos(a), sin(a)) * rad * float(k) * 0.6 + 0.5) * px;
+              float za = Z(vUv + o), zb = Z(vUv - o);
+              float d = persp > 0.5 ? zc - 2.0 / (1.0 / za + 1.0 / zb) : zc - 0.5 * (za + zb);
+              // הפרש גדול = עצם שעומד לפני רקע רחוק, לא פינה — בלי ״הילה״ סביב דמויות
+              ao += smoothstep(0.08, 0.5, d) * (1.0 - smoothstep(0.7, 1.4, d));
+            }
+          }
+          ao /= aoQ > 0.5 ? 8.0 : 4.0;
+          if (persp > 0.5) ao *= 1.0 - smoothstep(50.0, 110.0, zc);
+          c *= 1.0 - 0.42 * ao * (1.0 - 0.4 * night);
           vec3 b = vec3(0.0);
           for (int i = 0; i < 8; i++) {
             float a = float(i) * 0.7853981;
@@ -217,6 +238,8 @@
   sunSprite.scale.set(70, 70, 1);
   sunSprite.renderOrder = -9;
   scene.add(sunSprite);
+  // ציפורים, אבק מהגלגלים וניצוצות (js/fx.js)
+  const FX = G.makeFX ? G.makeFX(scene, isTouch) : null;
 
   // ================= מצב המשחק =================
   const TARGET_IDS = ['yossi', 'cohen', 'daniel', 'roi', 'ido'];
@@ -711,6 +734,7 @@
     ui.joyBox.classList.remove('pulse');
     void ui.joyBox.offsetWidth;
     ui.joyBox.classList.add('pulse');
+    if (FX && n >= 3) FX.sparkle(drv ? drv.x : player.x, drv ? drv.z : player.z, 6 + n);
   }
   function addCommunity(n) {
     S.community += n;
@@ -2893,6 +2917,29 @@
     return best && bd > 5 ? best : null;
   }
 
+  // ================= קולות המקום =================
+  // פעמיים בשנייה: מה יש סביב השחקן — פארק (ציפורים ועלים), גן משחקים/בית ספר (ילדים), חנויות (המולה), כביש ראשי (צפירות)
+  const PARK_K = new Set(['park', 'garden', 'grass', 'village_green', 'meadow', 'dog_park', 'wood', 'orchard']);
+  const KIDS_K = new Set(['playground', 'school', 'kindergarten', 'pitch']);
+  let scapeT = 0;
+  function updateScape(dt) {
+    scapeT -= dt;
+    if (scapeT > 0 || !W.areaAt) return;
+    scapeT = 0.5;
+    const p = drv || player;
+    let park = 0, kids = 0;
+    // חמש נקודות: במקום ובארבעה כיוונים, 22 מ׳ — מתחילים לשמוע לפני שנכנסים
+    for (const [ox, oz] of [[0, 0], [22, 0], [-22, 0], [0, 22], [0, -22]]) {
+      const k = W.areaAt(p.x + ox, p.z + oz);
+      if (PARK_K.has(k)) park += 0.2;
+      if (KIDS_K.has(k)) kids += 0.2;
+    }
+    let shops = 0;
+    for (const s of W.shops || []) if (Math.abs(s.x - p.x) < 35 && Math.abs(s.z - p.z) < 35) shops++;
+    const r = W.nearestRoad && W.nearestRoad(p.x, p.z, 30, (o) => o.cls === 'major');
+    A.scape({ park, kids, crowd: Math.min(1, shops / 5), road: r && r.d < 25 ? 1 : 0 });
+  }
+
   let saveT = 0;
   // ================= שיחת טלפון ממשה: כשנפתחת משימה חדשה =================
   let call = null, callWait = 0;
@@ -3135,6 +3182,7 @@
     updateGps(dt);
     if (EV) EV.update(dt, S.mission.status === 'active' || !!M.activeQuest() || mode !== 'play');
     if (CL) CL.update(dt, t);
+    updateScape(dt);
     A.ambience(dt, Math.max(0, lastNight), !!W.city, TR ? TR.nearby / 4 : 0);
     const m = S.mission;
     if (m.status === 'active') {
@@ -3413,7 +3461,7 @@
   }
 
   // ================= לולאה =================
-  let last = performance.now(), clock = 0, mmT = 0;
+  let last = performance.now(), clock = 0, mmT = 0, windT = 0;
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -3447,6 +3495,11 @@
       v.m.body.rotation.z = v.lean;
     }
     poseRider();
+    // רוח בעצים (חזקה יותר בגשם), ציפורים ביום, אבק מהגלגלים
+    const rainNow = (M && M.rain) || 0;
+    windT += dt * (1 + rainNow * 1.5);
+    if (G.NAT) G.NAT.wind.value = windT;
+    if (FX) FX.update(dt, clock, { cx: camTarget.x, cz: camTarget.z, day: lastNight < 0.3 && rainNow < 0.3, drv: mode === 'play' ? drv : null, night: Math.max(0, lastNight) });
 
     // סמנים
     const target = mode === 'play' ? gpsTarget() : null;
@@ -3505,7 +3558,7 @@
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
       get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, rcWalkers, get PS() { return PS; },
-      player, van, npcById, keys, EXITS, gps, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
+      player, van, npcById, keys, EXITS, gps, post, FX, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
   try {

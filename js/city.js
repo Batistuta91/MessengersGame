@@ -2364,6 +2364,30 @@
       for (const b of B) if (inBox(b.minx, b.minz, b.maxx, b.maxz)) poly(b.p, b.office ? '#9fb1c2' : '#c9b99d', 'rgba(60,50,40,0.5)');
       poly(chB.p, '#3b6fd8', '#ffd23f');
     };
+    // סוג השטח בנקודה (פארק, מגרש משחקים, בית ספר...) — לקולות העיר
+    for (const a of areaPolys)
+      if (!a.bb) {
+        a.bb = [1e9, 1e9, -1e9, -1e9];
+        for (let i = 0; i < a.p.length; i += 2) {
+          a.bb[0] = Math.min(a.bb[0], a.p[i]);
+          a.bb[1] = Math.min(a.bb[1], a.p[i + 1]);
+          a.bb[2] = Math.max(a.bb[2], a.p[i]);
+          a.bb[3] = Math.max(a.bb[3], a.p[i + 1]);
+        }
+      }
+    W.areaAt = function (x, z) {
+      for (const a of areaPolys) {
+        const b = a.bb;
+        if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) continue;
+        let inside = false;
+        for (let i = 0, j = a.p.length - 2; i < a.p.length; j = i, i += 2) {
+          const xi = a.p[i], zi = a.p[i + 1], xj = a.p[j], zj = a.p[j + 1];
+          if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+        }
+        if (inside) return a.k;
+      }
+      return null;
+    };
     W.locationName = function (x, z) {
       for (const p of W.places) if (Math.hypot(x - p.x, z - p.z) < p.r) return [p.he, p.en];
       const r = nearestRoad(x, z, 40, (o) => !!o.rd.name);

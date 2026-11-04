@@ -293,13 +293,100 @@
     noise(ctx.currentTime, 0.6, 1800, 0.5, 0.12);
   };
 
+  // ---------- קולות המקום: המשחק מעדכן איפה השחקן (פארק, שוק, גן משחקים, כביש ראשי) ----------
+  const scape = { park: 0, crowd: 0, kids: 0, road: 0 };
+  A.scape = function (s) {
+    Object.assign(scape, s);
+  };
+  // רעש בלולאה (משתמש ברעש הלבן המשותף)
+  function noiseSrc() {
+    if (!noiseBuf) {
+      const len = ctx.sampleRate * 1;
+      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    // כל מקור מתחיל במקום אחר בלולאה — שלא יישמעו זהים
+    src.start(0, Math.random());
+    return src;
+  }
+  // המולת אנשים: כמה ״קולות״ של רעש מסונן, עם עוצמה שקופצת בקצב של הברות ופורמנטים שזזים
+  let babble = null, rustle = null, scT = 0, hornT = 6;
+  function makeScape() {
+    babble = { g: ctx.createGain(), v: [] };
+    babble.g.gain.value = 0;
+    babble.g.connect(sfx);
+    for (let i = 0; i < 5; i++) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 5;
+      f.frequency.value = 600;
+      const vg = ctx.createGain();
+      vg.gain.value = 0.5;
+      const lfo = ctx.createOscillator(), depth = ctx.createGain();
+      lfo.frequency.value = 2.5 + Math.random() * 3.5;
+      depth.gain.value = 0.5;
+      lfo.connect(depth);
+      depth.connect(vg.gain);
+      lfo.start();
+      noiseSrc().connect(f);
+      f.connect(vg);
+      vg.connect(babble.g);
+      babble.v.push({ f, lfo });
+    }
+    // רשרוש עלים ברוח
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2600;
+    rustle = ctx.createGain();
+    rustle.gain.value = 0;
+    noiseSrc().connect(hp);
+    hp.connect(rustle);
+    rustle.connect(sfx);
+  }
+  function updateScape(dt, night) {
+    if (!babble) makeScape();
+    const t = ctx.currentTime;
+    // בלילה הרחוב שקט יותר
+    const quiet = 1 - night * 0.7;
+    const people = Math.max(scape.crowd, scape.kids * 0.85) * quiet;
+    babble.g.gain.setTargetAtTime(people * 0.05, t, 0.6);
+    scT -= dt;
+    if (scT <= 0) {
+      scT = 0.18;
+      // ילדים: פורמנטים גבוהים יותר
+      const k = scape.kids > scape.crowd ? 1 : 0;
+      for (const v of babble.v) {
+        v.f.frequency.setTargetAtTime((k ? 750 : 380) + Math.random() * (k ? 1000 : 650), t, 0.05);
+        v.lfo.frequency.setTargetAtTime(2.5 + Math.random() * 4, t, 0.2);
+      }
+      // משבי רוח בעלים
+      rustle.gain.setTargetAtTime(scape.park * (0.006 + Math.random() * 0.012), t, 0.5);
+    }
+    // צופר רחוק ליד כביש ראשי
+    hornT -= dt;
+    if (hornT <= 0) {
+      hornT = 7 + Math.random() * 14;
+      if (scape.road > 0.5 && night < 0.7) {
+        const f0 = 330 + Math.random() * 120;
+        blip(f0, t, 0.22, 'square', 0.008, sfx);
+        if (Math.random() < 0.5) blip(f0, t + 0.3, 0.14, 'square', 0.006, sfx);
+      }
+    }
+  }
+
   // ---------- אווירה: ציפורים ביום, צרצרים בלילה, תנועה ברקע ----------
   let ambT = 0, trafG = null, trafO = null;
   A.ambience = function (dt, night, city, traffic) {
     if (!ctx || !enabled) return;
+    if (city) updateScape(dt, night);
     ambT -= dt;
     if (ambT <= 0) {
-      ambT = night > 0.5 ? 0.35 + Math.random() * 0.3 : 1.2 + Math.random() * 3;
+      // בפארק — הרבה יותר ציפורים
+      ambT = night > 0.5 ? 0.35 + Math.random() * 0.3 : (1.2 + Math.random() * 3) * (1 - scape.park * 0.7);
       const t = ctx.currentTime;
       if (night > 0.5) {
         // צרצר
