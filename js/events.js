@@ -688,7 +688,10 @@
             updateTremp();
             if (ev.state === 'ride') return;
           }
-          ev.ttl -= dt;
+          // השעון לא רץ כשהשחקן כבר קרוב לאירוע, או באמצע עזרה — שהאדם לא ייעלם רגע לפני שמגיעים אליו
+          // (אחרי שהסכמנו לעזור — נגמר רק אם השחקן ממש נטש ונסע רחוק)
+          const dEv = Math.min(Math.hypot(player.x - ev.x, player.z - ev.z), Math.hypot(van.x - ev.x, van.z - ev.z));
+          if (ev.state === 'done' || dEv > (ev.state === 'ask' ? 50 : 150)) ev.ttl -= dt;
           if (ev.ttl <= 0) {
             if (ev.state !== 'done') api.toast('האירוע בשכונה הסתיים — יהיו עוד הזדמנויות');
             clear();

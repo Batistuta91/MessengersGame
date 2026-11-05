@@ -631,7 +631,12 @@
   }
   const PS0 = SPOT.playerStart || { x: 0, z: 0 };
   const JOG = mkPath(W.jogPath || [[PS0.x, PS0.z], [PS0.x + 20, PS0.z], [PS0.x + 20, PS0.z + 20]], true);
-  const jogPoint = (s) => pathPoint(JOG, s);
+  // מסלול הריצה של עידו נגזר מגבול הפארק — אם נקודה בו נוגעת בקיר/עמוד, דוחפים אותה החוצה (שלא ירוץ דרך קירות)
+  const jogPoint = (s) => {
+    const [x, z] = pathPoint(JOG, s);
+    const c = W.collide ? W.collide(x, z, 0.35) : null;
+    return c && c.hit ? [c.x, c.z] : [x, z];
+  };
 
   // ---------- סמנים בעולם ----------
   const arrowTex = G.canvasTex(32, 32, (g) => {
@@ -2592,7 +2597,8 @@
       n.p.group.visible = !n.hidden;
       if (n.hidden) continue;
       let moving = false;
-      const nearPlayer = !drv && dist(player, n) < (n.id === 'ido' ? 3.2 : 5);
+      // עידו עוצר לרוץ במקום כשמתקרבים אליו ברגל (9 מ׳) — כדי שלא ייראה כאילו הוא בורח מהשחקן
+      const nearPlayer = !drv && dist(player, n) < (n.id === 'ido' ? 9 : 5);
       const ctl = n.ctrl ? n.ctrl(dt, n, nearPlayer) : undefined;
       if (ctl !== undefined) moving = ctl;
       else if (n.id === 'ido') {
@@ -2640,6 +2646,7 @@
   // בעיר גדולה: הולך רגל שנשאר רחוק עובר למדרכה קרובה לשחקן (מחוץ לטווח הראייה)
   let walkerMoveT = 0;
   const pathsNear = (x, z) => W.pathsNear(x, z);
+  const relocV = new T.Vector3();
   function relocateWalkers(dt) {
     if (!W.paths || !W.paths.length || (walkerMoveT -= dt) > 0) return;
     walkerMoveT = 2;
@@ -2650,9 +2657,13 @@
         const cp = cand[(Math.random() * cand.length) | 0];
         const m = cp.pts[(cp.pts.length / 2) | 0], d = Math.hypot(m[0] - player.x, m[1] - player.z);
         if (d < 70 || d > 260) continue;
-        w.path = mkPath(cp.pts, false);
-        w.s = Math.random() * w.path.len * 2;
-        const [x, z] = pathPoint(w.path, w.s);
+        const path = mkPath(cp.pts, false), s = Math.random() * path.len * 2;
+        const [x, z] = pathPoint(path, s);
+        // לא ״מקפיצים״ הולך רגל מול המצלמה — רק במקום שלא רואים כרגע
+        relocV.set(x, 1, z).project(camera);
+        if (relocV.z < 1 && Math.abs(relocV.x) < 1.15 && Math.abs(relocV.y) < 1.15) continue;
+        w.path = path;
+        w.s = s;
         w.x = x;
         w.z = z;
         break;
@@ -3200,7 +3211,25 @@
       return;
     }
     exitArmed = false;
-    travel(near.to, true);
+    // בחרו לנסוע (ניווט ליציאה מהשליח / מהמפה / מהתפריט) — יוצאים מיד
+    if (gps.dest === 'exit' && gps.exit === near) return travel(near.to, true);
+    // סתם עברו בטבעת (סיבוב בעיר, דפי תניא, אירוע בשכונה) — שואלים לפני שעוברים עיר
+    van.v = 0;
+    const evNow = EV && EV.current && EV.current.state !== 'done';
+    talkTo({
+      phone: true, id: 'exit', x: player.x, z: player.z,
+      def: { name: '🚐 יציאה מ' + CITY_NAMES[CITY], role: 'שלט ירוק' },
+      nodes: {
+        a: {
+          s: 'npc',
+          t: 'הכביש הזה יוצא מהעיר ל' + CITY_NAMES[near.to] + '.' + (evNow ? ' שימו לב: מישהו בשכונה עדיין מחכה לעזרה שלכם.' : '') + ' לנסוע?',
+          c: [
+            { t: '🚐 כן, נוסעים ל' + CITY_NAMES[near.to], end: () => travel(near.to, true) },
+            { t: 'לא, נשארים ב' + CITY_NAMES[CITY], end: () => toast('נשארים ב' + CITY_NAMES[CITY] + ' — מסובבים את הטנק בחזרה לעיר') },
+          ],
+        },
+      },
+    });
   }
   function travel(to, byRoad) {
     if (to === CITY) return;
@@ -3649,7 +3678,7 @@
   if (G.debug)
     G.dbg = {
       get S() { return S; }, get mode() { return mode; }, get dlg() { return dlg; },
-      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, rcWalkers, get PS() { return PS; },
+      get M() { return M; }, get cur() { return cur; }, get drv() { return drv; }, tp, W, vehicles, enterVehicle, get TR() { return TR; }, get EV() { return EV; }, get CL() { return CL; }, get MZ() { return MZ; }, get RC() { return RC; }, npcs, walkers, rcWalkers, get PS() { return PS; },
       player, van, npcById, keys, EXITS, gps, post, FX, addJoy, tick, interact, addVehicle, enterVan, exitVan, horn, radio, wrapTefillin, dialogChoose, dialogAdvance, startPlay, startMission,
     };
 
