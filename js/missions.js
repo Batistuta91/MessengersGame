@@ -644,8 +644,17 @@
         const n = N(id);
         if (id === 'zalman' && !done('secret')) continue;
         const [x, z] = CROWD_SPOTS[k++ % CROWD_SPOTS.length];
+        // השכנים נכנסים לרחבה בהליכה (מ-16 מ׳ בערך) — לא ״צצים״ פתאום ליד החנוכייה
+        const dx = x - MX, dz = z - MZ, L = Math.hypot(dx, dz) || 1;
+        let sx = x + (dx / L) * 16, sz = z + (dz / L) * 16;
+        if (W.collide && W.collide(sx, sz, 0.4).hit) [sx, sz] = [x + (dx / L) * 8, z + (dz / L) * 8];
+        if (W.collide && W.collide(sx, sz, 0.4).hit) [sx, sz] = [x, z];
+        if (n.hidden || Math.hypot(n.x - x, n.z - z) > 30) {
+          n.x = sx;
+          n.z = sz;
+        }
         n.hidden = false;
-        hold(n, x, z, MX, MZ);
+        walkTo(n, x, z, 2.4, () => hold(n, x, z, MX, MZ));
       }
       api.spawnExtraWalkers();
       api.setRadio(1);

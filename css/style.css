@@ -302,6 +302,19 @@ body.touch.in-van #tracker { min-height: 0; overflow-y: auto; }
   .card { padding: 14px 16px; }
   .tagline { font-size: 15px; margin-bottom: 12px; }
 }
+/* מסך תוצאות בטלפון (מסך נמוך): הכול צפוף יותר, הנתונים בשני טורים, וכפתור ״המשך״ תמיד גלוי בתחתית */
+@media (max-height: 520px) {
+  #results .stars { font-size: 26px; margin: 0; }
+  #results h2 { font-size: 19px; margin: 2px 0 6px; }
+  #results .res-stats { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; margin: 4px 0; }
+  #results .res-stats li { padding: 3px 2px; font-size: 13.5px; }
+  #results h3 { margin: 8px 0 4px; font-size: 14px; }
+  #results .res-changes { font-size: 13px; line-height: 1.5; }
+  #journal h2 { font-size: 19px; margin: 0 0 6px; }
+  #journal-body { max-height: none; overflow: visible; }
+  #journal .btns,
+  #results .btns { position: sticky; bottom: -14px; margin: 8px -16px -14px; padding: 8px 16px 10px; background: var(--navy); border-top: 1px solid #31476f; }
+}
 @media (orientation: portrait) {
   body.touch.playing #rotate {
     display: flex; position: fixed; inset: 0; z-index: 100; background: var(--navy); color: var(--yellow);

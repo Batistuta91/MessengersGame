@@ -119,16 +119,20 @@
     }
     // ---------- 2. ארגזים לחנות ----------
     function startBoxes() {
+      const boxAt = (s, i) => [s.x - s.ux * (1 + i * 0.9) + s.nx * 0.8, s.z - s.uz * (1 + i * 0.9) + s.nz * 0.8];
+      // רק חנות שכל שלושת הארגזים (וחיים) עומדים בה על מדרכה פנויה — לא בתוך קיר של הבניין הסמוך
+      const free = (x, z) => !W.collide || !W.collide(x, z, 0.45).hit;
       const shops = (W.shops || []).filter((s) => {
         const d = Math.hypot(s.x - player.x, s.z - player.z);
-        return d > 35 && d < 180;
+        return d > 35 && d < 180 && [0, 1, 2].every((i) => free(...boxAt(s, i))) && free(s.x + s.ux * 1.6, s.z + s.uz * 1.6);
       });
       if (!shops.length) return false;
       const sh = shops[(rnd() * shops.length) | 0];
       ev = { type: 'boxes', npc: 'haim', state: 'ask', ttl: 180, x: sh.x, z: sh.z, shop: sh, left: 3 };
       show(NP.haim, sh.x + sh.ux * 1.6, sh.z + sh.uz * 1.6, sh.ang);
       boxes.forEach((b, i) => {
-        b.position.set(sh.x - sh.ux * (1 + i * 0.9) + sh.nx * 0.8, 0, sh.z - sh.uz * (1 + i * 0.9) + sh.nz * 0.8);
+        const [bx, bz] = boxAt(sh, i);
+        b.position.set(bx, 0, bz);
         b.rotation.y = sh.ang + (rnd() - 0.5) * 0.4;
         b.visible = false;
       });

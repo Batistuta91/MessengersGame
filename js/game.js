@@ -1880,8 +1880,14 @@
     A.success();
     buzz([60, 80, 60]);
   }
+  // resultsSoon: מסך תוצאות שכבר נקבע אבל עוד לא הגיע זמנו — כדי שסיכום הפרק לא יקפוץ לפניו
+  let resultsSoon = 0;
   function queueResults(d, delay) {
-    setTimeout(() => (queuedResults = d), delay === undefined ? 1200 : delay);
+    resultsSoon++;
+    setTimeout(() => {
+      resultsSoon--;
+      queuedResults = d;
+    }, delay === undefined ? 1200 : delay);
   }
   function closeResults() {
     show($('results'), false);
@@ -2003,7 +2009,7 @@
   }
   // פעם אחת, אחרי מסך התוצאות של המשימה האחרונה בפרק
   function updateChapterEnd() {
-    if (mode !== 'play' || !chapterDone(CITY) || S.flags['sum_' + CITY] || queuedResults || pendingResults || dlg || call) return;
+    if (mode !== 'play' || !chapterDone(CITY) || S.flags['sum_' + CITY] || queuedResults || resultsSoon || pendingResults || dlg || call) return;
     S.flags['sum_' + CITY] = true;
     save();
     chapterSummary(CITY);
@@ -2659,6 +2665,7 @@
         if (d < 70 || d > 260) continue;
         const path = mkPath(cp.pts, false), s = Math.random() * path.len * 2;
         const [x, z] = pathPoint(path, s);
+        if (Math.hypot(x - player.x, z - player.z) < 70) continue;
         // לא ״מקפיצים״ הולך רגל מול המצלמה — רק במקום שלא רואים כרגע
         relocV.set(x, 1, z).project(camera);
         if (relocV.z < 1 && Math.abs(relocV.x) < 1.15 && Math.abs(relocV.y) < 1.15) continue;
